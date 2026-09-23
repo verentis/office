@@ -1,0 +1,20 @@
+{
+  "name": "verentis-office",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/editor"],
+  "scripts": {
+    "check": "npm run typecheck --workspace apps/editor && node --test tests/unit/*.test.mjs && npm run check:package && npm run check:deploy",
+    "build": "npm run build --workspace apps/editor",
+    "check:package": "node scripts/check-package.mjs",
+    "check:deploy": "node scripts/check-deploy.mjs",
+    "test:integration": "playwright test",
+    "fixtures": "python3 tests/fixtures/generate.py"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "@verentis/cli": "0.2.18",
+    "yaml": "2.9.1"
+  }
+}

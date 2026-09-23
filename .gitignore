@@ -1,0 +1,12 @@
+node_modules/
+.nuxt/
+.output/
+bin/
+obj/
+TestResults/
+test-results/
+playwright-report/
+dev/.env
+dev/data/
+artifacts/
+*.vpkg

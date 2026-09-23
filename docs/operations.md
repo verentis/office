@@ -1,0 +1,107 @@
+# Configuration and operations
+
+## Isolated development
+
+`docker compose -f dev/compose.yaml up --build -d` starts one CODE, one harness,
+one wrapper and a Caddy local-TLS reverse proxy. Only `127.0.0.1:8443` is published.
+`node scripts/wait-stack.mjs` waits for all three HTTPS services.
+
+| Browser origin | Container route |
+| --- | --- |
+| `https://office.localhost:8443` | proxy → editor:3000 |
+| `https://code.localhost:8443` | proxy → code:9980 |
+| `https://wopi.localhost:8443` | proxy → harness:8080 |
+| `https://host.localhost:8443` | static synthetic SDK contract host; not Verentis |
+
+The proxy has matching Docker DNS aliases so CODE reaches the same WOPISrc the
+browser sees. Discovery uses private `http://code:9980/hosting/discovery`; CODE
+advertises the configured public TLS origin. The pinned CODE image's
+`net.content_security_policy` explicitly admits the wrapper and synthetic parent
+host as frame ancestors. Browser tests exercise this three-origin nesting.
+`home_mode.enable=true` suppresses CODE welcome popups for this isolated harness;
+its upstream limits (20 connections / 10 documents) are not production capacity.
+Do not guess configuration across versions.
+
+Caddy creates a local CA in the `tls` volume. For manual browsing, extract and
+trust **only this development CA** in a dedicated browser profile:
+
+```sh
+mkdir -p artifacts
+docker compose -f dev/compose.yaml cp proxy:/data/caddy/pki/authorities/local/root.crt artifacts/office-local-ca.crt
+```
+
+Do not install a CA automatically or copy its private key. The automated browser
+accepts this local certificate; the isolated CODE disables outbound certificate
+verification explicitly. **Neither setting belongs in a real deployment.**
+If `.localhost` resolution is unsupported by your browser, map these three
+names to loopback using your normal local development DNS configuration.
+
+`dev/.env.example` is informational; the stack needs no secrets or `.env` file.
+Changing addressing requires changing Compose, Caddy, Nuxt and test origins
+together. Never expose the harness's fixed identity as authentication.
+
+## Runtime settings
+
+Deployable wrapper: `NUXT_BACKEND_URL`, `NUXT_PUBLIC_PARENT_ORIGIN` (exact trusted
+workspace origin); `NUXT_PUBLIC_SYNTHETIC_ONLY=false`. Test-only wrapper settings:
+`NUXT_PUBLIC_EDITOR_ORIGIN`, `NUXT_PUBLIC_WOPI_ORIGIN`, syntheticOnly=true.
+The live backend has **no enable-integration switch**.
+
+Harness: `DataDirectory`, `FixtureDirectory`, `EditorOrigin`, `CodeOrigin`,
+`WopiOrigin`, `DiscoveryUri`. Configuration is operator-owned; do not accept any
+of these from a document, token, message, user form or public request.
+
+## Restart, expiry and recovery
+
+`docker compose -f dev/compose.yaml restart harness` preserves files, versions,
+sessions and locks in the SQLite volume. A restart never renews expired tokens.
+After 30 minutes the UI reports expiry; save/lock operations deny it. Preserve
+edits in the existing editor while arranging an explicit recovery/reopen.
+The expiry warning persists and the wrapper disables save requests. An editor
+readiness failure or expiry offers a reset only after explicit confirmation
+that unsaved edits will be discarded. Save requests that receive no CODE response
+within 30 seconds display a timeout and retain the dirty warning.
+On 409, never retry by discarding a revision check. Keep the authoritative winner
+and recover the losing edits as a distinct manually reconciled version.
+Do not clear dirty state merely because CODE acknowledged a save.
+
+Normal stop: `docker compose -f dev/compose.yaml down` preserves synthetic data
+and CA. `down --volumes` **destroys** both; use only deliberately for throwaway
+fixtures. Back up SQLite with its backup API or stop the writer before copying
+the database/WAL; a live copy of only the main file is not a safe backup.
+File inspection does not create sessions. Each new admission removes up to 1,000
+expired sessions; expiry is still checked on every authorization and mutation.
+Synthetic files and their revision histories remain until the owner deliberately
+removes the throwaway volume; this harness is not an unbounded hosted service.
+
+## Deployment preparation, not adoption
+
+`deploy/render.mjs` accepts JSON with `region`, identical `dataRegion`,
+`parentOrigin`, `editorImage`, `backendImage`. Images must be immutable registry
+references. See `npm run check:deploy` for non-routable render-test inputs.
+Render with `node deploy/render.mjs <your-approved-input.json>`.
+No actual environment, registry, credentials or resource owner is hard-coded.
+The output has no published ports, no test host, no live adapter, and CODE is in
+an explicitly blocked profile. This is a reusable adoption input, not a working
+production topology. `artifacts/deploy` contains **fake digest test inputs** and
+must never be deployed.
+
+Platform adoption must provide ingress/TLS, region and resource ownership,
+network restrictions, secret references, monitoring, vulnerability scans, and
+verified immutable artifacts. Use environment-approved, least-privilege OIDC
+for a separately authorized registry import/promotion workflow; no shared
+credentials and no cloud role exist in this repository's workflows.
+Local image IDs are not registry manifest digests. Do not promote them as such.
+Promote the same scanned/signed artifacts, not rebuilt equivalents.
+The manual preparation workflow retains `office-images.tar.gz`, its SHA-256
+checksum, source commit and local image IDs alongside unsigned packages and the
+CODE lock for seven days. An authorized promotion process can verify the archive
+and use `docker load` rather than rebuilding. Registry digests, scans, signatures,
+CODE import and deployment approval are still required separately.
+
+Drain gate before a future live upgrade/rollback: stop new admissions; enumerate
+durable sessions; wait for acknowledged conditional saves and lock release;
+retain recoverable dirty sessions; expire authorization deliberately; only then
+switch traffic. This gate is **not implemented or certified** for live sessions.
+The fail-closed backend has zero live sessions to drain. A forced CODE restart
+can lose unsaved synthetic edits; verify fresh reopen before stopping the stack.

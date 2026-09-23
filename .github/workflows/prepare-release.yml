@@ -1,0 +1,44 @@
+name: Prepare immutable release (no publish or deployment)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release-preparation
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --no-audit --no-fund && npm run check
+      - name: Prepare local images only
+        run: |
+          docker build -f deploy/backend.Dockerfile -t office-backend:prepared .
+          docker build -f deploy/editor.Dockerfile -t office-editor:prepared .
+          node scripts/check-images.mjs office-backend:prepared office-editor:prepared
+          docker image inspect office-backend:prepared office-editor:prepared --format '{{.Id}}' > artifacts/image-ids.txt
+          docker save office-backend:prepared office-editor:prepared | gzip > artifacts/office-images.tar.gz
+          sha256sum artifacts/office-images.tar.gz > artifacts/office-images.tar.gz.sha256
+          git rev-parse HEAD > artifacts/source-commit.txt
+          cp deploy/code.lock.json artifacts/code.lock.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: unsigned-release-preparation
+          path: |
+            artifacts/packages/
+            artifacts/image-ids.txt
+            artifacts/code.lock.json
+            artifacts/office-images.tar.gz
+            artifacts/office-images.tar.gz.sha256
+            artifacts/source-commit.txt
+          retention-days: 7
+# Deliberately no registry login, import, signing, id-token permission or deployment.
+# Platform-owned adoption must add environment approval + narrowly scoped OIDC,
+# scan/sign/import by verified digest and promote the same artifacts without rebuild.

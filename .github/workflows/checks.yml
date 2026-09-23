@@ -1,0 +1,44 @@
+name: Secret-free checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: office-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check && dotnet test --verbosity quiet
+      - run: node scripts/verify-code-lock.mjs
+      - run: npm run build
+      - run: mkdir -p artifacts && PLAYWRIGHT_BROWSERS_PATH="$PWD/artifacts/browsers" TMPDIR="$PWD/artifacts" npx playwright install --with-deps chromium
+      - run: docker compose -f dev/compose.yaml up --build -d
+      - run: node scripts/wait-stack.mjs && npm run test:integration
+      - run: docker build -f deploy/backend.Dockerfile -t office-backend:check . && node scripts/check-images.mjs office-backend:check office-synthetic-editor
+      - if: always()
+        run: docker compose -f dev/compose.yaml down
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verification
+          path: |
+            artifacts/browser-results.json
+            artifacts/packages/
+            artifacts/deploy/
+          retention-days: 7

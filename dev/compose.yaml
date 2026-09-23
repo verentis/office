@@ -1,0 +1,50 @@
+name: office-synthetic
+services:
+  proxy:
+    image: caddy:2.11.2-alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d
+    ports: ["127.0.0.1:8443:8443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./host.html:/srv/host.html:ro
+      - tls:/data
+    networks:
+      default:
+        aliases: [office.localhost, code.localhost, wopi.localhost, host.localhost]
+    depends_on: [editor, harness, code]
+  editor:
+    build:
+      context: ..
+      dockerfile: deploy/editor.Dockerfile
+    environment:
+      NUXT_BACKEND_URL: http://harness:8080
+      NUXT_PUBLIC_SYNTHETIC_ONLY: "true"
+      NUXT_PUBLIC_PARENT_ORIGIN: https://host.localhost:8443
+      NUXT_PUBLIC_EDITOR_ORIGIN: https://code.localhost:8443
+      NUXT_PUBLIC_WOPI_ORIGIN: https://wopi.localhost:8443
+  harness:
+    build:
+      context: ..
+      dockerfile: dev/harness.Dockerfile
+    environment:
+      EditorOrigin: https://office.localhost:8443
+      CodeOrigin: https://code.localhost:8443
+      WopiOrigin: https://wopi.localhost:8443
+      DiscoveryUri: http://code:9980/hosting/discovery
+    volumes: [synthetic:/data]
+  code:
+    image: docker.io/collabora/code:26.04.4.1.1@sha256:1efda3043e8b9cb437d1b6c6efe20cc3753760e634de012b8dac391da488bf97
+    cap_add: [MKNOD]
+    command:
+      - "--o:net.content_security_policy=frame-ancestors https://office.localhost:8443 https://host.localhost:8443;"
+    environment:
+      aliasgroup1: https://wopi.localhost:8443
+      extra_params: >-
+        --o:ssl.enable=false --o:ssl.termination=true
+        --o:server_name=code.localhost:8443 --o:net.proto=IPv4
+        --o:ssl.ssl_verification=false
+        --o:logging.level=warning --o:logging.anonymize.anonymize_user_data=true
+        --o:home_mode.enable=true
+    shm_size: 256mb
+volumes:
+  synthetic:
+  tls:

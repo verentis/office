@@ -1,0 +1,26 @@
+api-version: verentis.io/v1
+kind: Application
+metadata:
+  name: office
+  package-id: office
+  display-name: Office — integration disabled
+  description: Prerequisite-gated Office wrapper. Live viewing and editing are unavailable.
+  version: 0.1.0
+  author: Verentis
+  labels:
+    integration-status: disabled
+    synthetic-tests-only: "true"
+spec:
+  scope: global
+  entry: https://office.invalid
+  mime-types: []
+  capabilities: []
+  permissions: []
+  sandbox:
+    allow-scripts: true
+    allow-same-origin: true
+    allow-popups: false
+    allow-forms: true
+packaging:
+  publisher: verentis
+  encryption: none

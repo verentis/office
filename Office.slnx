@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="services/wopi/Office.Wopi.csproj" />
+  <Project Path="services/backend/Office.Backend.csproj" />
+  <Project Path="tests/harness/Office.Harness.csproj" />
+  <Project Path="tests/protocol/Office.Protocol.Tests.csproj" />
+</Solution>

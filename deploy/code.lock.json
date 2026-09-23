@@ -1,0 +1,11 @@
+{
+  "repository": "docker.io/collabora/code",
+  "tag": "26.04.4.1.1",
+  "digest": "sha256:1efda3043e8b9cb437d1b6c6efe20cc3753760e634de012b8dac391da488bf97",
+  "platforms": {
+    "linux/amd64": "sha256:c004f998dd88c2dd7aec68b38865de9807534a28e160211136faed516fb126cc",
+    "linux/arm64": "sha256:0c433e67802a269d52cf91366471eb6a57df8ac9614db8d1334461dd30ce4710",
+    "linux/ppc64le": "sha256:9c37bc20c6647b3926ac42b621c37beb1d409b78005570dadfbe966e220652dd"
+  },
+  "verification": "Registry manifest digest checked in compatibility assessment; docker pull verified on 2026-09-23. This is not production/security approval."
+}

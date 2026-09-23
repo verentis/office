@@ -1,0 +1,22 @@
+{
+    auto_https disable_redirects
+    admin off
+}
+https://office.localhost:8443 {
+    tls internal
+    reverse_proxy editor:3000
+}
+https://code.localhost:8443 {
+    tls internal
+    reverse_proxy code:9980
+}
+https://wopi.localhost:8443 {
+    tls internal
+    reverse_proxy harness:8080
+}
+https://host.localhost:8443 {
+    tls internal
+    root * /srv
+    try_files /host.html
+    file_server
+}

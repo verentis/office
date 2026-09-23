@@ -1,0 +1,3 @@
+# Deliberately non-routable until separately approved platform adoption.
+spec:
+  entry: https://office.invalid
