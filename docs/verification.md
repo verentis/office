@@ -6,6 +6,55 @@ Docker Engine 29.5.3. Baseline Office commit:
 No commit, publication, registry import, cloud provisioning or live deployment
 was performed. Apache-2.0 LICENSE is unchanged.
 
+## Local Aspire follow-up (2026-09-23)
+
+Office baseline `52cf80b464bee96437a71d17b0936adc3e1e645a`; platform baseline
+`0f809e6b8dd33f75f73161b02ace7f1928ef5a3e`. Existing unrelated platform Execution
+changes were left untouched.
+
+Commands below were actually executed. Platform commands are relative to its
+repository; Office commands are relative to Office unless stated otherwise.
+
+| Command | Observed result |
+| --- | --- |
+| `scripts/setup-certs.sh --export-ca-only` (platform) | Exported existing public mkcert CA; no trust installation or leaf regeneration |
+| `dotnet test utilities/deployment/Verentis.Deployment.Tests --filter 'FullyQualifiedName~LocalFrontendRouting\|FullyQualifiedName~LocalOffice' --nologo -v quiet` (platform) | 41 passed, 0 failed/skipped: exact routes, sibling path, run/publish/test models, image lock, missing prerequisites, hostname/server-EKU checks, wrong CA and safe public-only export |
+| `dotnet build "src/0 - Aspire/Verentis.AppHost" --no-restore --nologo -v quiet` (platform) | Passed, 0 errors; existing warnings include platform AutoMapper 14.0.0 advisory NU1903 and nullable warnings |
+| `dotnet build utilities/local-office --nologo -v quiet` (platform) | Passed, 0 warnings/errors |
+| `npm run check` | Types, 8 Node tests, released CLI validation/packing of local/compose/production overlays and deployment checks passed |
+| `dotnet test --nologo -v quiet` | 26 protocol tests passed |
+| `TMPDIR="$PWD/office/artifacts/aspire" dotnet run --no-build --project platform/utilities/local-office` (workspace root, after creating the artifact directory) | Actual Aspire-owned Nuxt, CODE, harness and shared TLS YARP started and became responsive; only Office-focused resources started by this command |
+| `curl --noproxy '*' --cacert platform/scripts/.certs/rootCA.pem https://office.localtest.me/_ready` (workspace root) | Trusted HTTPS 200, `{"status":"ready"}` |
+| `NODE_EXTRA_CA_CERTS="$PWD/../platform/scripts/.certs/rootCA.pem" npm run test:aspire` | 2 passed: trusted browser HTTPS, discovery, real WSS, DOCX edit/save, fresh context reopen/re-edit preserving both markers, denied live admission/foreign origins; runtime log assertions passed |
+| `docker compose -f dev/compose.yaml up --build -d && node scripts/wait-stack.mjs` | Existing standalone localhost stack rebuilt and became responsive |
+| `npm run test:integration -- --grep 'docx: real CODE\|harness rejects'` | 2 passed, including durable DOCX save and fresh reopen after restarting both Compose harness and CODE |
+| `git diff --check` (both repositories) | Passed |
+
+Runtime Docker inspection additionally confirmed the locked CODE digest, strict
+`ssl.ssl_verification=true`, configured OpenSSL trust and a single read-only mount
+containing **only the public CA**. The gateway's network alias resolves callbacks
+inside Aspire's Docker network; an unknown hostname returned 404 in the focused
+host. Browser tests did not use `ignoreHTTPSErrors` or certificate-error flags.
+During implementation, the browser test correctly failed when the outbound
+OpenSSL trust file was omitted; explicit OpenSSL and storage CA configuration
+fixed the callback handshake without weakening verification.
+Final review also found plaintext synthetic WOPI tokens in YARP informational
+proxy logs. Office registration now raises both ASP.NET and YARP logging to
+Warning. A restarted focused host passed the browser suite's new checks of
+gateway, CODE and WOPI stdout/stderr, with no credential-bearing URLs. No
+credential values are included in this evidence document.
+
+This is end-to-end evidence for the **focused Aspire host using the same
+registration helper**, not a claim that the full platform was started or that
+source-string tests prove runtime behavior. The normal AppHost compiled and its
+registration/routing is regression-tested. Full-platform startup was deliberately
+not launched to avoid affecting unrelated services. The existing six-format
+Compose suite above is historical evidence; this change reran the targeted DOCX
+and admission cases, not every format. Aspire and Compose validation resources
+were stopped afterwards; named synthetic state volumes were preserved.
+Raw Aspire browser results are in ignored `artifacts/aspire/browser-results.json`.
+No system/browser CA trust was changed, and live integration remains blocked.
+
 ## Passed commands
 
 All commands run from the Office repository root:

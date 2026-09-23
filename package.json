@@ -10,6 +10,7 @@
     "check:package": "node scripts/check-package.mjs",
     "check:deploy": "node scripts/check-deploy.mjs",
     "test:integration": "playwright test",
+    "test:aspire": "playwright test --config playwright.aspire.config.ts",
     "fixtures": "python3 tests/fixtures/generate.py"
   },
   "devDependencies": {

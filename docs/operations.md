@@ -1,10 +1,96 @@
 # Configuration and operations
 
-## Isolated development
+## Local Aspire
+
+Normal platform run mode registers `app-office`, `office-wopi` and `office-code`.
+Office must be a sibling of `platform`; install its npm dependencies with
+`npm ci`. Platform's `scripts/setup-certs.sh` generates the wildcard leaf/key
+and exports **only** mkcert's public `rootCA.pem` into `scripts/.certs`.
+For an existing trusted certificate, `scripts/setup-certs.sh --export-ca-only`
+does not install mkcert, regenerate a certificate or change CA trust.
+The AppHost checks the leaf/key pair, Office DNS names and chain to the public
+CA, and rejects missing/invalid prerequisites before registering Office.
+Never copy `rootCA-key.pem` into this directory or any container.
+Export rejects an existing leaf that is expired, unsuitable for server TLS or
+signed by another CA, without replacing the previous public CA export. Restore
+the original `CAROOT` if it changed. To deliberately replace an expired or wrong
+leaf with one signed by the currently trusted mkcert CA, stop the local host,
+back up the existing leaf/key if needed, then run from `platform/`:
+
+```sh
+mkcert -cert-file scripts/.certs/localtest.me.pem -key-file scripts/.certs/localtest.me-key.pem localtest.me '*.localtest.me' localhost 127.0.0.1 ::1
+scripts/setup-certs.sh --export-ca-only
+```
+
+This does not install trust for a different CA; that remains an explicit owner
+action through the normal certificate setup.
+
+| Browser origin | Shared frontend gateway destination |
+| --- | --- |
+| `https://office.localtest.me` | HTTPS Nuxt dev server, dynamic Aspire port |
+| `https://office-code.localtest.me` | CODE HTTP port 9980; HTTPS/WSS terminates at gateway |
+| `https://office-wopi.localtest.me` | Synthetic harness HTTP port 8080 |
+
+These are exact host routes at order 0, ahead of the workspace wildcard at 100.
+The original Host is preserved. The gateway has the Aspire container-network
+alias `office-wopi.localtest.me` and listens internally on 443, so CODE does
+**not** resolve callbacks to its own loopback or depend on host-gateway forwarding.
+CODE mounts only the public CA file read-only and uses
+`ssl.ssl_verification=true`, explicit `ssl.ca_file_path` / `storage.ssl.ca_file_path`
+and OpenSSL `SSL_CERT_FILE` pointing at `/etc/ssl/certs/office-rootCA.pem`.
+No CA private key or leaf private key is mounted into CODE. Its frame ancestors
+admit only the Office wrapper, not arbitrary workspace/parent origins.
+
+Harness discovery uses Aspire's internal CODE endpoint. Nuxt uses the harness
+endpoint directly. CODE discovery → harness health → Nuxt `/_ready` determines
+startup readiness. The gateway references routes without waiting on callback
+dependencies, avoiding a startup cycle. `verentis-office-synthetic` is a named
+Docker volume retaining synthetic SQLite data across host restarts.
+Normal shutdown preserves it. Do not delete it unless deliberately discarding
+all synthetic files, versions, sessions and locks.
+
+The normal platform gateway's existing certificate policy on private Nuxt
+upstreams is unchanged; browser ingress and CODE callback verification are
+separate, trusted TLS paths. Keep this local harness private. Publish and
+`ASPIRE_TEST_MODE` do not add Office resources or require its checkout/certificates.
+The production wrapper/backend remain fail-closed.
+Office registration suppresses ASP.NET request and YARP informational proxy
+logging on the shared local gateway because WOPI credentials occur in URLs.
+The Aspire browser suite checks gateway/CODE/harness output for plaintext
+credential URLs; do not re-enable verbose proxy logs during document sessions.
+
+For focused validation without starting/stopping unrelated services:
+
+```sh
+# From platform/, with port 443 free and the shared certificate ready
+dotnet run --project utilities/local-office
+# In another terminal, from office/
+mkdir -p artifacts
+PLAYWRIGHT_BROWSERS_PATH="$PWD/artifacts/browsers" TMPDIR="$PWD/artifacts" npx playwright install chromium
+NODE_EXTRA_CA_CERTS="$PWD/../platform/scripts/.certs/rootCA.pem" npm run test:aspire
+```
+
+The focused host links the same Office registration used by the normal AppHost,
+not a reimplementation. Its dashboard uses `https://localhost:18890`.
+The browser must already trust the mkcert CA; the Aspire test does not disable
+TLS validation, install trust or accept arbitrary self-signed certificates.
+It checks trusted ingress, discovery, WSS, a real CODE edit/save, fresh-context
+reopen/re-edit and blocked live admission. Do not run focused and full hosts
+together. Ctrl+C stops only resources owned by that host.
+Linux machines missing browser libraries need the Playwright `--with-deps`
+installation option. The Aspire suite is an explicit required verification gate
+for local-host/certificate changes; standalone Office CI cannot run it without
+the sibling platform checkout and preconfigured browser CA trust.
+`/_ready` is process readiness, not ongoing document-save health. CODE and WOPI
+have their own Aspire health checks; successful document saves are established by
+the browser acceptance suite, not a green readiness endpoint.
+
+## Standalone Compose development
 
 `docker compose -f dev/compose.yaml up --build -d` starts one CODE, one harness,
 one wrapper and a Caddy local-TLS reverse proxy. Only `127.0.0.1:8443` is published.
 `node scripts/wait-stack.mjs` waits for all three HTTPS services.
+Use the `compose` manifest overlay (`--env compose`); `local` targets Aspire.
 
 | Browser origin | Container route |
 | --- | --- |

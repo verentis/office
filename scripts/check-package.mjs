@@ -11,7 +11,7 @@ assert.deepEqual(manifest.spec.permissions, []);
 assert.deepEqual(manifest.spec.capabilities, []);
 assert.equal(manifest.metadata.labels['integration-status'], 'disabled');
 mkdirSync('artifacts/packages', { recursive: true });
-for (const env of ['local', 'production']) {
+for (const env of ['local', 'compose', 'production']) {
     execFileSync('node_modules/.bin/verentis', ['validate', 'manifests', '--env', env], { stdio: 'inherit' });
     execFileSync('node_modules/.bin/verentis', ['pack', 'manifests', '--env', env, '--no-sign', '--out', `artifacts/packages/${env}`], { stdio: 'inherit' });
 }
