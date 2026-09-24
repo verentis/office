@@ -8,6 +8,36 @@ This records source-contract inspection, not a successful
 Office integration or production certification. No Verentis file was opened or
 saved through Collabora during this assessment.
 
+## Unreleased platform prerequisite update
+
+The subsequent cross-repository work now implements authoritative stable-node
+metadata/content access and conditional saves in the platform working tree:
+
+- `GET /v1/nodes/{nodeId}/file`
+- `GET /v1/nodes/{nodeId}/content`
+- `PUT /v1/nodes/{nodeId}/content`
+
+These endpoints use ordinary user authorization, require explicit `X-Branch`,
+and require `If-Match` for writes. They provide opaque revisions, idempotent write
+outcomes and recovery coordinated with legacy writers, quota and purge. The
+existing-file implementation passed 85 focused tests, including real HTTP/JWT
+requests and native Cosmos/blob persistence. Independent review findings were
+fixed and their concurrency regressions rerun.
+
+The working tree now also contains installation-bound backend delegation,
+host/SDK integration and the live Office adapter. The local 0.1.2 preview opens
+real workspace files; an XLSX edit was durably saved and independently downloaded,
+and the user's original workbook rendered without changing its content.
+The local overlay registers 56 extensions against the pinned CODE discovery.
+This is not per-format fidelity or production certification. Production
+manifests remain disabled. Atomic directory membership during concurrent
+new-child creation is not claimed. See [live setup](live-local-setup.md).
+
+The current API and recovery contract is documented in the platform's
+`docs/node-conditional-files.md`. The revision table, gap matrix and source
+anchors below remain the historical initial assessment, not the status of these
+later uncommitted changes.
+
 ## Inspected revisions
 
 | Repository | HEAD | Working-tree qualification |
@@ -20,8 +50,9 @@ saved through Collabora during this assessment.
 | cli | `64b3b5a426f905e191627dc729ce23e054d4d825` | Local manifest, packing, registry, template and test changes |
 | internal-apps | `67d8991e6781de70920f35ee821dec1e4a4eb2db` | Local application-manager, dependency and deployment changes |
 
-Related repositories are read-only for this work. Their local changes are not
-released contracts, and are not attributed solely to the recorded HEAD.
+Related repositories were read-only during this initial assessment; subsequent
+cross-repository implementation was explicitly authorized. Local changes are not
+released contracts and are not attributed solely to the recorded HEAD.
 
 ## Contract/gap matrix
 

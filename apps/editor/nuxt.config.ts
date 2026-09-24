@@ -18,13 +18,14 @@ export default defineNuxtConfig({
         public: {
             syntheticOnly: false,
             parentOrigin: '',
+            parentOrigins: '',
             editorOrigin: 'https://code.localhost:8443',
             wopiOrigin: 'https://wopi.localhost:8443'
         }
     },
     app: {
         head: {
-            title: 'Office — live integration disabled',
+            title: 'Verentis Office',
             meta: [{ name: 'referrer', content: 'no-referrer' }]
         }
     },

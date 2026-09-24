@@ -29,7 +29,7 @@ action through the normal certificate setup.
 | --- | --- |
 | `https://office.localtest.me` | HTTPS Nuxt dev server, dynamic Aspire port |
 | `https://office-code.localtest.me` | CODE HTTP port 9980; HTTPS/WSS terminates at gateway |
-| `https://office-wopi.localtest.me` | Synthetic harness HTTP port 8080 |
+| `https://office-wopi.localtest.me` | Live .NET backend, dynamic Aspire HTTP port |
 
 These are exact host routes at order 0, ahead of the workspace wildcard at 100.
 The original Host is preserved. The gateway has the Aspire container-network
@@ -39,48 +39,46 @@ CODE mounts only the public CA file read-only and uses
 `ssl.ssl_verification=true`, explicit `ssl.ca_file_path` / `storage.ssl.ca_file_path`
 and OpenSSL `SSL_CERT_FILE` pointing at `/etc/ssl/certs/office-rootCA.pem`.
 No CA private key or leaf private key is mounted into CODE. Its frame ancestors
-admit only the Office wrapper, not arbitrary workspace/parent origins.
+admit the Office wrapper and explicitly configured workspace origins, never
+arbitrary workspace/parent origins.
 
-Harness discovery uses Aspire's internal CODE endpoint. Nuxt uses the harness
-endpoint directly. CODE discovery → harness health → Nuxt `/_ready` determines
+The backend retrieves discovery through CODE's trusted HTTPS origin. Nuxt uses
+the backend endpoint directly. CODE discovery → backend health → Nuxt `/_ready` determines
 startup readiness. The gateway references routes without waiting on callback
-dependencies, avoiding a startup cycle. `verentis-office-synthetic` is a named
-Docker volume retaining synthetic SQLite data across host restarts.
-Normal shutdown preserves it. Do not delete it unless deliberately discarding
-all synthetic files, versions, sessions and locks.
+dependencies, avoiding a startup cycle. Live SQLite recovery state and protected
+credentials reside in `artifacts/live-data`, with a persistent key ring under
+`keys/`. Preserve both across restarts; never delete them to resolve a conflict.
+See [live setup and recovery](live-local-setup.md).
 
 The normal platform gateway's existing certificate policy on private Nuxt
 upstreams is unchanged; browser ingress and CODE callback verification are
-separate, trusted TLS paths. Keep this local harness private. Publish and
+separate, trusted TLS paths. Keep the local preview private. Publish and
 `ASPIRE_TEST_MODE` do not add Office resources or require its checkout/certificates.
-The production wrapper/backend remain fail-closed.
+An unconfigured backend rejects live admission.
 Office registration suppresses ASP.NET request and YARP informational proxy
 logging on the shared local gateway because WOPI credentials occur in URLs.
 The Aspire browser suite checks gateway/CODE/harness output for plaintext
 credential URLs; do not re-enable verbose proxy logs during document sessions.
 
-For focused validation without starting/stopping unrelated services:
+For focused hosting without starting/stopping unrelated services:
 
 ```sh
 # From platform/, with port 443 free and the shared certificate ready
 dotnet run --project utilities/local-office
-# In another terminal, from office/
-mkdir -p artifacts
-PLAYWRIGHT_BROWSERS_PATH="$PWD/artifacts/browsers" TMPDIR="$PWD/artifacts" npx playwright install chromium
-NODE_EXTRA_CA_CERTS="$PWD/../platform/scripts/.certs/rootCA.pem" npm run test:aspire
 ```
 
 The focused host links the same Office registration used by the normal AppHost,
 not a reimplementation. Its dashboard uses `https://localhost:18890`.
 The browser must already trust the mkcert CA; the Aspire test does not disable
 TLS validation, install trust or accept arbitrary self-signed certificates.
-It checks trusted ingress, discovery, WSS, a real CODE edit/save, fresh-context
-reopen/re-edit and blocked live admission. Do not run focused and full hosts
-together. Ctrl+C stops only resources owned by that host.
+It requires a running platform API, independent backend configuration and an
+authorized workspace. The older `test:aspire` browser suite targets the previous
+synthetic resource topology; it is not a live-preview acceptance suite.
+Do not run focused and full hosts together. Ctrl+C stops only resources owned
+by that host.
 Linux machines missing browser libraries need the Playwright `--with-deps`
-installation option. The Aspire suite is an explicit required verification gate
-for local-host/certificate changes; standalone Office CI cannot run it without
-the sibling platform checkout and preconfigured browser CA trust.
+installation option. Live acceptance requires the sibling platform checkout and preconfigured browser
+CA trust; standalone Office CI does not establish live platform acceptance.
 `/_ready` is process readiness, not ongoing document-save health. CODE and WOPI
 have their own Aspire health checks; successful document saves are established by
 the browser acceptance suite, not a green readiness endpoint.
@@ -160,7 +158,7 @@ expired sessions; expiry is still checked on every authorization and mutation.
 Synthetic files and their revision histories remain until the owner deliberately
 removes the throwaway volume; this harness is not an unbounded hosted service.
 
-## Deployment preparation, not adoption
+## Reusable preparation (not a live topology)
 
 `deploy/render.mjs` accepts JSON with `region`, identical `dataRegion`,
 `parentOrigin`, `editorImage`, `backendImage`. Images must be immutable registry
@@ -172,7 +170,7 @@ an explicitly blocked profile. This is a reusable adoption input, not a working
 production topology. `artifacts/deploy` contains **fake digest test inputs** and
 must never be deployed.
 
-Platform adoption must provide ingress/TLS, region and resource ownership,
+Production/UAT adoption must provide ingress/TLS, region and resource ownership,
 network restrictions, secret references, monitoring, vulnerability scans, and
 verified immutable artifacts. Use environment-approved, least-privilege OIDC
 for a separately authorized registry import/promotion workflow; no shared
@@ -191,3 +189,89 @@ retain recoverable dirty sessions; expire authorization deliberately; only then
 switch traffic. This gate is **not implemented or certified** for live sessions.
 The fail-closed backend has zero live sessions to drain. A forced CODE restart
 can lose unsaved synthetic edits; verify fresh reopen before stopping the stack.
+
+## Sprint AKS deployment
+
+`deploy-sprint.yml` deploys on pushes to Office `main`, **only** to the sprint
+dev AKS `verentis-apps` namespace. It does not deploy UAT/production or enable
+`manifests/environments/production.yaml`. It builds the live editor and WOPI
+backend from this commit and applies their ACR **manifest digests** and the
+official CODE digest in `deploy/code.lock.json`; it never deploys the synthetic
+harness. `npm run check:deploy` runs the offline shape and failure contract
+without a cluster. No cloud deployment is performed by that check.
+
+Before enabling pushes, provision the following **GitHub Actions variables**,
+without defaults:
+
+| Variable | Required value |
+| --- | --- |
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | Repository-specific federated OIDC identity and sprint tenant/subscription GUIDs. Grant only the needed ACR push, AKS credentials and namespace workload permissions. Federated trust must match Office `main`. |
+| `ACR_NAME`, `ACR_LOGIN_SERVER` | Sprint ACR name and matching `<name>.azurecr.io` host; AKS must be able to pull from it. |
+| `AKS_CLUSTER_NAME`, `AKS_RESOURCE_GROUP` | Sprint dev AKS cluster and its resource group. |
+| `OFFICE_PLATFORM_ORIGIN` | The target sprint API, e.g. `https://api.sprint-9.verentis.dev` (no trailing slash). |
+| `OFFICE_PARENT_ORIGINS` | Comma-separated, exact HTTPS origins under the same sprint domain (e.g. `https://my-workspace.sprint-9.verentis.dev`), no wildcard, trailing slash or spaces. Must match approved platform origins. |
+| `OFFICE_CLIENT_ID` | Nonzero GUID of a separately registered Office backend client, paired with its installation by the platform owner; never reuse the local/test client. |
+| `OFFICE_BACKEND_SECRET` | Name of a pre-provisioned Kubernetes Secret in `verentis-apps` with nonempty key `ClientSecret` (independent backend credential); **not** the secret value or a GitHub Actions secret. |
+| `OFFICE_STATE_PVC` | Name of a pre-provisioned, Bound, durable RWO/RWOP PVC in `verentis-apps`, with sufficient capacity for SQLite/WAL and the DataProtection `keys/` directory. Retain/back up the claim independently of deployments. |
+
+The workflow checks all variables, lock syntax and the pre-provisioned namespace,
+secret and PVC before building, and checks the objects again before apply. It
+checks that `ClientSecret` is nonempty without printing its value; missing inputs fail rather
+than deploying an unconfigured backend. Secret values are read only by the pod
+from Kubernetes; never put them in workflow files or manifests.
+The backend uses one replica, `Recreate` upgrade strategy, a claim mounted at
+`/data`, and an init container that grants the .NET non-root user (UID 1654)
+ownership of the claim directory. The backend's startup lock also rejects a
+second writer. Back up the **whole** directory including WAL and `keys/` with
+SQLite backup API or with the writer stopped; deleting the claim invalidates
+existing protected session credentials. Storage provisioner must permit the
+init container to set ownership; validate this with a first-rollout restart.
+
+Create public DNS (external-dns or operator-managed) and allow cert-manager's
+`letsencrypt-prod` issuer to issue separate certificates for:
+
+- `https://office.apps.verentis.dev` — wrapper; Nuxt server-side API calls use
+  private `http://office-wopi:8080`.
+- `https://office-code.apps.verentis.dev` — CODE HTTPS/WSS at ingress; discovery
+  and websocket traffic must reach port 9980.
+- `https://office-wopi.apps.verentis.dev` — CODE/browser WOPI callbacks at port
+  8080; HTTPS certificate must be trusted by CODE's normal system CA store.
+
+The existing platform certificate for `*.verentis.dev` does **not** cover the
+`*.apps.verentis.dev` hosts. CODE's upstream HTTP terminates TLS at nginx;
+`ssl.ssl_verification=true` is retained for outgoing HTTPS WOPI callbacks and
+CODE advertises its public HTTPS host. Its frame ancestors include only the
+Office wrapper and the configured exact sprint workspace origins. All Office
+ingresses disable nginx access logs because WOPI access tokens are in URLs;
+maintain the same prohibition in other proxies/APM, and do not log query strings.
+Do not route the WOPI ingress through a proxy that forwards tokens to logs.
+Check network policy/cluster egress allows CODE and backend to resolve/reach
+their public HTTPS callback/discovery origins, and that cluster trust includes
+the issuer's root. No mkcert private/public local CA material is deployed.
+
+**Rollout gate:** wait for all three Deployment rollouts, all three issued TLS
+certificates, HTTPS CODE discovery, wrapper `/_ready` and configured backend
+`/health` (the workflow does these checks). Then authorize an actual session
+with the separately paired backend identity, confirm a save and reopen, and
+restart the backend to check session/keys survival before admitting users.
+Green process readiness does not prove platform pairing or durable saves.
+The deferred dynamic parent-origin validation change is **not part of this
+deployment**; do not push `main` or admit users until it is complete and reviewed.
+Marketplace package approval/publication is a separate action.
+
+**Sprint upgrade risk:** pushing changes to the Office repository can restart
+the wrapper or backend. Kubernetes leaves CODE running when its rendered pod
+template (including its pinned digest and frame policy) has not changed; a CODE
+version/configuration change or node failure can nevertheless restart it and
+lose unsaved in-memory edits. CODE is intentionally not auto-updated from
+upstream tags. Blue/green CODE routing and migration of active sessions are
+deferred; sprint auto-deployment is not a lossless live-upgrade guarantee.
+
+**Rollback/upgrade:** before replacing any live component, stop new admissions,
+drain outstanding saves/locks and preserve recoverable dirty sessions. This
+drain gate is not automated or certified: coordinate it manually with the
+platform owner. Retrieve prior immutable editor/backend image digests from the
+last successful workflow run, keep the CODE digest compatible, and restore the
+previous rendered workload images (or revert the commit and deploy only after
+drain approval). Do not delete or recreate the PVC/secret; verify sessions
+and fresh reopen after rollback. A forced CODE restart may lose unsaved edits.

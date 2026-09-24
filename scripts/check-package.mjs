@@ -10,6 +10,10 @@ assert.deepEqual(manifest.spec['mime-types'], []);
 assert.deepEqual(manifest.spec.permissions, []);
 assert.deepEqual(manifest.spec.capabilities, []);
 assert.equal(manifest.metadata.labels['integration-status'], 'disabled');
+const local = parse(readFileSync('manifests/environments/local.yaml', 'utf8'));
+assert.equal(local.metadata.labels['integration-status'], 'local-preview');
+execFileSync(process.execPath, ['scripts/sync-formats.mjs', '--check'], { stdio: 'inherit' });
+assert.deepEqual(local.spec.permissions, ['node.file.read', 'node.node.create']);
 mkdirSync('artifacts/packages', { recursive: true });
 for (const env of ['local', 'compose', 'production']) {
     execFileSync('node_modules/.bin/verentis', ['validate', 'manifests', '--env', env], { stdio: 'inherit' });

@@ -2,6 +2,7 @@ FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35
 WORKDIR /src
 COPY package.json package-lock.json ./
 COPY apps/editor/package.json apps/editor/package.json
+COPY vendor/sdk/ vendor/sdk/
 RUN npm ci --no-audit --no-fund
 COPY apps/editor/ apps/editor/
 RUN npm run build

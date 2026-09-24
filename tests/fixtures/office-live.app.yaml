@@ -1,0 +1,28 @@
+# Local acceptance candidate only. Never publish this fixture as a support claim.
+api-version: verentis.io/v1
+kind: Application
+metadata:
+  name: office
+  package-id: office
+  display-name: Office — local acceptance
+  description: Explicit real-platform XLSX acceptance candidate, not a published format claim.
+  version: 0.1.1
+  author: Verentis
+  labels:
+    acceptance-only: "true"
+spec:
+  scope: global
+  entry: https://office.localtest.me
+  mime-types:
+    - pattern: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      mode: edit
+      priority: 150
+  capabilities: []
+  permissions:
+    - node.file.read
+    - node.node.create
+  sandbox:
+    allow-scripts: true
+    allow-same-origin: true
+    allow-popups: false
+    allow-forms: true

@@ -44,7 +44,7 @@ app.MapGet("/health", () => new { status = "synthetic-only", liveIntegration = "
 app.MapPost("/sessions", () => Results.Json(LiveAdmission.Blocker, statusCode: 503));
 app.MapPost("/test/sessions", async (LaunchRequest request, SyntheticStore store, Discovery discovery, CancellationToken cancellationToken) =>
 {
-    if (!Discovery.Formats.Contains(request.Format)) return Results.BadRequest(new { error = "Unknown fixture format." });
+    if (!new[] { "docx", "odt", "xlsx", "ods", "pptx", "odp" }.Contains(request.Format)) return Results.BadRequest(new { error = "Unknown fixture format." });
     var file = request.FileId;
     if (file is not null && (file.Length != 32 || !file.All(Uri.IsHexDigit))) return Results.BadRequest();
     if (file is null)

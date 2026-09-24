@@ -7,7 +7,7 @@ or a legal determination.
 
 | Component | Version/source | Upstream rights / review |
 | --- | --- | --- |
-| Verentis SDK | npm `@verentis/sdk@0.1.1` | MIT (published package metadata) |
+| Verentis SDK | Local `@verentis/sdk@0.2.0` tarball; see `scripts/use-local-sdk.mjs` | MIT (`LICENSE` included in the package); unreleased integration, not a registry publication |
 | Verentis CLI | npm `@verentis/cli@0.2.18`, build/validation only | MIT (published package metadata) |
 | Nuxt / Vue | npm locks, Nuxt 4.5.2 / Vue 3.5.43 | MIT |
 | TypeScript / Playwright | npm locks, build/test only | Apache-2.0 |
@@ -29,8 +29,10 @@ Upstream source locations:
 - https://github.com/CollaboraOnline/online and https://www.libreoffice.org/about-us/licenses/
 - https://www.collaboraonline.com/code/
 
-No upstream executable or document was copied into Office source. Docker pulls
-and npm/NuGet caches are development artifacts, not relicensed source.
+No CODE/LibreOffice executable or upstream document was copied into Office source.
+The explicit local SDK archive in `vendor/sdk/` retains its MIT license and npm
+lock integrity; it is not relicensed as Office-owned work. Docker pulls and
+npm/NuGet caches remain development artifacts.
 The release owner must generate exact transitive notices and source offers
 where applicable for the chosen distribution; don't describe this file as
 completed legal clearance. Collabora, LibreOffice and Verentis marks remain

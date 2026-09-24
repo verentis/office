@@ -1,0 +1,226 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: office-editor
+  namespace: __NAMESPACE__
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: office-editor}
+  template:
+    metadata:
+      labels: {app: office-editor}
+    spec:
+      containers:
+        - name: editor
+          image: __EDITOR_IMAGE__
+          ports:
+            - {name: http, containerPort: 3000}
+          env:
+            - {name: NUXT_BACKEND_URL, value: "http://office-wopi:8080"}
+            - {name: NUXT_PUBLIC_SYNTHETIC_ONLY, value: "false"}
+            - {name: NUXT_PUBLIC_PARENT_ORIGINS, value: __PARENT_ORIGINS__}
+            - {name: NUXT_PUBLIC_EDITOR_ORIGIN, value: "https://office-code.apps.verentis.dev"}
+            - {name: NUXT_PUBLIC_WOPI_ORIGIN, value: "https://office-wopi.apps.verentis.dev"}
+          readinessProbe:
+            httpGet: {path: /_ready, port: http}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 1000m, memory: 512Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: office-editor
+  namespace: __NAMESPACE__
+spec:
+  type: ClusterIP
+  selector: {app: office-editor}
+  ports:
+    - {name: http, port: 3000, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: office-wopi
+  namespace: __NAMESPACE__
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: office-wopi}
+  template:
+    metadata:
+      labels: {app: office-wopi}
+    spec:
+      initContainers:
+        - name: own-state
+          image: __BACKEND_IMAGE__
+          command: ["/bin/sh", "-c", "chown 1654:1654 /data && chmod 700 /data"]
+          securityContext: {runAsUser: 0}
+          volumeMounts:
+            - {name: state, mountPath: /data}
+      containers:
+        - name: backend
+          image: __BACKEND_IMAGE__
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            - {name: DataDirectory, value: /data}
+            - {name: Office__ClientId, value: __CLIENT_ID__}
+            - name: Office__ClientSecret
+              valueFrom:
+                secretKeyRef: {name: __BACKEND_SECRET__, key: ClientSecret, optional: false}
+            - {name: Office__PlatformOrigin, value: __PLATFORM_ORIGIN__}
+            - {name: EditorOrigin, value: "https://office.apps.verentis.dev"}
+            - {name: CodeOrigin, value: "https://office-code.apps.verentis.dev"}
+            - {name: WopiOrigin, value: "https://office-wopi.apps.verentis.dev"}
+          volumeMounts:
+            - {name: state, mountPath: /data}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 1000m, memory: 1Gi}
+      volumes:
+        - name: state
+          persistentVolumeClaim: {claimName: __STATE_PVC__}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: office-wopi
+  namespace: __NAMESPACE__
+spec:
+  type: ClusterIP
+  selector: {app: office-wopi}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: office-code
+  namespace: __NAMESPACE__
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: office-code}
+  template:
+    metadata:
+      labels: {app: office-code}
+    spec:
+      containers:
+        - name: code
+          image: __CODE_IMAGE__
+          ports:
+            - {name: http, containerPort: 9980}
+          securityContext:
+            capabilities:
+              add: [MKNOD]
+          env:
+            - {name: aliasgroup1, value: "https://office-wopi.apps.verentis.dev:443"}
+            - {name: extra_params, value: __CODE_PARAMS__}
+          args:
+            - __CODE_FRAME_POLICY__
+          volumeMounts:
+            - {name: shm, mountPath: /dev/shm}
+          readinessProbe:
+            httpGet: {path: /hosting/discovery, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: 2000m, memory: 2Gi}
+      volumes:
+        - name: shm
+          emptyDir: {medium: Memory, sizeLimit: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: office-code
+  namespace: __NAMESPACE__
+spec:
+  type: ClusterIP
+  selector: {app: office-code}
+  ports:
+    - {name: http, port: 9980, targetPort: http}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: office-editor
+  namespace: __NAMESPACE__
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-access-log: "false"
+spec:
+  ingressClassName: nginx
+  tls:
+    - {hosts: [office.apps.verentis.dev], secretName: office-editor-tls}
+  rules:
+    - host: office.apps.verentis.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: office-editor
+                port: {number: 3000}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: office-wopi
+  namespace: __NAMESPACE__
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-access-log: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "17m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - {hosts: [office-wopi.apps.verentis.dev], secretName: office-wopi-tls}
+  rules:
+    - host: office-wopi.apps.verentis.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: office-wopi
+                port: {number: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: office-code
+  namespace: __NAMESPACE__
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-access-log: "false"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - {hosts: [office-code.apps.verentis.dev], secretName: office-code-tls}
+  rules:
+    - host: office-code.apps.verentis.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: office-code
+                port: {number: 9980}

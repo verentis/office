@@ -5,6 +5,17 @@ namespace Office.Protocol.Tests;
 
 public sealed class DiscoveryTests
 {
+    public static IEnumerable<object[]> SupportedFormats => Discovery.Formats.Select(format => new object[] { format });
+
+    [Theory]
+    [MemberData(nameof(SupportedFormats))]
+    public async Task Every_registered_format_selects_its_supported_action(string format)
+    {
+        var action = Discovery.CanEdit(format) ? "edit" : "view";
+        var discovery = Create($"""<wopi-discovery><action ext="{format}" name="{action}" urlsrc="https://code.localhost:8443/browser/abc/cool.html?"/></wopi-discovery>""");
+        Assert.Contains("WOPISrc=", await discovery.Action(format, false, new("https://wopi.localhost:8443/wopi/test/main/files/f")));
+    }
+
     private static Discovery Create(string xml) => new(new HttpClient(new Handler(xml)), new("http://configured-code/hosting/discovery"), new("https://code.localhost:8443"));
     [Fact]
     public async Task SelectsConfiguredActionAndBindsSource()

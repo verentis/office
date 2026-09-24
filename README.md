@@ -1,10 +1,14 @@
-# Verentis Office — live integration disabled
+# Verentis Office — local development preview
 
-Nuxt/Vue/TypeScript wrapper, .NET 10 fail-closed session boundary and a **separate,
-synthetic-only** Collabora CODE/WOPI harness. This is partial delivery, not a
-completed Verentis integration. No real Verentis document is opened or saved.
-Platform acceptance gates **B–E remain blocked**: see
-[compatibility](docs/compatibility.md) and [implementation plan](docs/implementation-plan.md).
+Nuxt/Vue wrapper and .NET 10 WOPI backend connecting real Verentis files to
+self-hosted Collabora CODE. The local preview uses installation-bound backend
+delegation and conditional platform saves. It registers 56 CODE-supported file
+extensions; view-only formats remain read-only. See
+[live setup, supported formats and limitations](docs/live-local-setup.md).
+Production package manifests remain disabled pending production acceptance.
+The separate sprint AKS workload deployment is documented in
+[operations](docs/operations.md#sprint-aks-deployment).
+The standalone synthetic harness is separate from the live Aspire integration.
 
 ## Run with local Aspire
 
@@ -14,24 +18,28 @@ platform's shared mkcert certificate using `platform/scripts/setup-certs.sh`
 `platform/scripts/setup-certs.sh --export-ca-only` exports only the public root
 without changing system/browser trust.
 
-Normal platform startup now starts the Office Nuxt dev server, synthetic WOPI
-harness and digest-pinned CODE automatically:
+Normal platform startup starts the Office Nuxt dev server, live WOPI backend
+and digest-pinned CODE automatically:
 
 ```sh
 # From platform/
 dotnet run --project "src/0 - Aspire/Verentis.AppHost"
 ```
 
-Visit **https://office.localtest.me**. Editor and callbacks use
+Open a supported file in its authenticated workspace after installation,
+consent and backend pairing. The wrapper runs at **https://office.localtest.me**;
+editor and callbacks use
 `https://office-code.localtest.me` and `https://office-wopi.localtest.me`.
 All three use the shared wildcard certificate; CODE verifies callback TLS.
 Missing checkout, image lock or certificate files fail startup with setup guidance.
-Publish and `ASPIRE_TEST_MODE` exclude Office. This remains **synthetic-only**;
-no live integration, authentication or MIME claims are enabled.
+Publish and `ASPIRE_TEST_MODE` exclude Office resources. See the
+[setup guide](docs/live-local-setup.md) for the local preview manifest and
+independent backend credential.
 
 To validate Office without starting unrelated platform services, use
 `dotnet run --project utilities/local-office` from platform instead. Do not run
-both hosts together: they share port 443 and the synthetic state volume.
+both hosts together: they share port 443 and the live coordination directory.
+The focused host still needs a running platform API and backend configuration.
 See [operations](docs/operations.md) for topology and verification commands.
 
 ## Run standalone Compose development
@@ -76,23 +84,28 @@ commands, per-format results and remaining release gates.
 Browser traces are disabled to avoid capturing session credentials.
 
 `npm run check` runs types, boundary unit tests, released CLI 0.2.18 validation
-and unsigned packing, deployment rendering and immutable-reference checks.
+and unsigned packing, deployment rendering and immutable-reference checks,
+including the offline sprint workload contract.
 `dotnet test` covers WOPI, SQLite CAS/locks/expiry/restart and fail-closed admission.
 `npm run fixtures` regenerates the six original synthetic documents.
 Stop with `docker compose -f dev/compose.yaml down` (preserves the database).
 
 ## Layout
 
-- `apps/editor` — public SDK 0.1.1 handshake and independent CODE iframe boundary.
-- `services/backend` — deployable, permanently unavailable live session API.
+- `apps/editor` — pinned local SDK bridge, borderless editor and independent CODE iframe boundary.
+- `services/backend` — installation-bound live sessions and durable conditional-save coordination.
 - `services/wopi` — scoped WOPI protocol and configured discovery.
 - `tests/harness`, `tests/fixtures`, `tests/protocol`, `tests/browser` — test-only state and evidence.
-- `manifests` — one package root; **no MIME, permission or edit capability claims**.
-- `deploy` — pinned image builds and reusable regional rendering; no deployment.
-- `.github/workflows` — secret-free checks and manual, unsigned release preparation.
+- `manifests` — one package root; the local overlay enables supported formats, while production stays gated.
+- `deploy` — pinned image builds and reusable regional rendering.
+- `k8s` — sprint-only live workload template; no marketplace package publication.
+- `.github/workflows` — secret-free checks, manual unsigned release preparation,
+  and an OIDC-authenticated main-push sprint AKS deployment (not UAT/production).
 
 See [architecture](docs/architecture.md), [API](docs/api.md),
 [operations/recovery](docs/operations.md), [security](SECURITY.md),
 [contributing](CONTRIBUTING.md) and [third-party inventory](THIRD-PARTY-NOTICES.md).
-The existing Apache-2.0 license is unchanged. No publication, import, cloud
-provisioning or live deployment is authorized by this repository's plan.
+The existing Apache-2.0 license is unchanged. This repository does not provision
+cloud identities, permissions, secrets or storage, and does not publish packages.
+Do not push `main` until deferred dynamic parent-origin validation is complete
+and the sprint deployment prerequisites and rollout gate have been approved.

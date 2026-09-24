@@ -1,0 +1,112 @@
+name: Deploy Office to sprint AKS
+on:
+  push:
+    branches: [main]
+permissions:
+  id-token: write
+  contents: read
+concurrency:
+  group: office-sprint
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+      AKS_CLUSTER_NAME: ${{ vars.AKS_CLUSTER_NAME }}
+      AKS_RESOURCE_GROUP: ${{ vars.AKS_RESOURCE_GROUP }}
+      OFFICE_PLATFORM_ORIGIN: ${{ vars.OFFICE_PLATFORM_ORIGIN }}
+      OFFICE_PARENT_ORIGINS: ${{ vars.OFFICE_PARENT_ORIGINS }}
+      OFFICE_CLIENT_ID: ${{ vars.OFFICE_CLIENT_ID }}
+      OFFICE_BACKEND_SECRET: ${{ vars.OFFICE_BACKEND_SECRET }}
+      OFFICE_STATE_PVC: ${{ vars.OFFICE_STATE_PVC }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: npm ci --no-audit --no-fund
+      - name: Check Office package and backend
+        run: npm run check && dotnet test tests/protocol/Office.Protocol.Tests.csproj --verbosity quiet
+      - name: Validate required sprint settings and CODE pin
+        run: node scripts/render-sprint.mjs --validate
+      - name: Verify CODE manifest digest with registry
+        run: node scripts/verify-code-lock.mjs
+      - name: Azure login (repository OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Check cluster prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          az aks get-credentials --resource-group "$AKS_RESOURCE_GROUP" --name "$AKS_CLUSTER_NAME" --overwrite-existing
+          kubectl get namespace verentis-apps -o name
+          kubectl get pvc "$OFFICE_STATE_PVC" -n verentis-apps -o json |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.status.phase!=="Bound"||!p.spec.accessModes.some(m=>["ReadWriteOnce","ReadWriteOncePod"].includes(m)))throw Error("Office state PVC must be Bound and single-node/single-pod writable")})'
+          kubectl describe secret "$OFFICE_BACKEND_SECRET" -n verentis-apps |
+            grep -Eq '^ClientSecret:[[:space:]]*[1-9][0-9]* bytes$' ||
+            { echo "::error::Office backend Secret needs a nonempty ClientSecret key"; exit 1; }
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to sprint ACR
+        run: az acr login --name "$ACR_NAME"
+      - name: Build and push editor
+        id: editor
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/editor.Dockerfile
+          push: true
+          tags: ${{ env.ACR_LOGIN_SERVER }}/verentis/office-editor:sha-${{ github.sha }}
+          cache-from: type=gha,scope=office-editor
+          cache-to: type=gha,scope=office-editor,mode=max
+      - name: Build and push backend
+        id: backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/backend.Dockerfile
+          push: true
+          tags: ${{ env.ACR_LOGIN_SERVER }}/verentis/office-backend:sha-${{ github.sha }}
+          cache-from: type=gha,scope=office-backend
+          cache-to: type=gha,scope=office-backend,mode=max
+      - name: Recheck prerequisites and apply immutable workloads
+        env:
+          EDITOR_IMAGE: ${{ env.ACR_LOGIN_SERVER }}/verentis/office-editor@${{ steps.editor.outputs.digest }}
+          BACKEND_IMAGE: ${{ env.ACR_LOGIN_SERVER }}/verentis/office-backend@${{ steps.backend.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl get pvc "$OFFICE_STATE_PVC" -n verentis-apps -o json |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.status.phase!=="Bound"||!p.spec.accessModes.some(m=>["ReadWriteOnce","ReadWriteOncePod"].includes(m)))throw Error("Office state PVC is not Bound for a single writer")})'
+          kubectl describe secret "$OFFICE_BACKEND_SECRET" -n verentis-apps |
+            grep -Eq '^ClientSecret:[[:space:]]*[1-9][0-9]* bytes$' ||
+            { echo "::error::Office backend Secret needs a nonempty ClientSecret key"; exit 1; }
+          node scripts/render-sprint.mjs | kubectl apply -f -
+          for name in office-wopi office-code office-editor; do
+            kubectl rollout status deployment/"$name" -n verentis-apps --timeout=10m
+          done
+          for name in office-wopi office-code office-editor; do
+            for attempt in {1..30}; do
+              if kubectl get -n verentis-apps certificate/"$name"-tls >/dev/null 2>&1; then break; fi
+              sleep 5
+            done
+            kubectl wait -n verentis-apps --for=condition=Ready certificate/"$name"-tls --timeout=15m
+          done
+          curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors --max-time 15 https://office-code.apps.verentis.dev/hosting/discovery -o /dev/null
+          curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors --max-time 15 https://office.apps.verentis.dev/_ready -o /dev/null
+          curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors --max-time 15 https://office-wopi.apps.verentis.dev/health |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const h=JSON.parse(s);if(h.backendConfigured!==true||h.draining!==false)throw Error("Office backend is not admitting new sessions")})'

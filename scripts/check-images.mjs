@@ -22,9 +22,9 @@ try {
         await new Promise(resolve => setTimeout(resolve, 500));
     }
     assert.ok(ready);
-    const live = await fetch(`${origin}/sessions`, { method: 'POST' });
+    const live = await fetch(`${origin}/sessions`, { method: 'POST', headers: { Origin: 'https://office.localtest.me' } });
     assert.equal(live.status, 503);
-    assert.equal((await live.json()).code, 'platform_prerequisites_missing');
+    assert.equal((await live.json()).code, 'office_backend_setup_required');
     assert.equal((await fetch(`${origin}/test/sessions`, { method: 'POST' })).status, 404);
     assert.equal((await fetch(`${origin}/wopi/synthetic/main/files/f?access_token=untrusted`)).status, 401);
 } finally {

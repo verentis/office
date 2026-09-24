@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -6,11 +7,24 @@ namespace Office.Wopi;
 
 public sealed partial class Discovery(HttpClient client, Uri discoveryUri, Uri editorOrigin)
 {
-    public static readonly string[] Formats = ["docx", "odt", "xlsx", "ods", "pptx", "odp"];
+    private static readonly IReadOnlyDictionary<string, DocumentFormat> Catalog = LoadFormats();
+    public static readonly string[] Formats = Catalog.Keys.ToArray();
+    public static bool CanEdit(string format) => Catalog.TryGetValue(format, out var entry) && entry.Mode == "edit";
+
+    private static IReadOnlyDictionary<string, DocumentFormat> LoadFormats()
+    {
+        using var stream = typeof(Discovery).Assembly.GetManifestResourceStream("Office.Formats.json")
+            ?? throw new InvalidOperationException("Office format catalog is missing.");
+        return JsonSerializer.Deserialize<Dictionary<string, DocumentFormat>>(stream, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            ?? throw new InvalidOperationException("Office format catalog is invalid.");
+    }
+
+    private sealed record DocumentFormat(string[] MimeTypes, string Mode, string Icon);
 
     public async Task<string> Action(string format, bool readOnly, Uri wopiSource, CancellationToken cancellationToken = default)
     {
-        if (!Formats.Contains(format, StringComparer.Ordinal)) throw new ArgumentException("Unsupported synthetic format.");
+        if (!Formats.Contains(format, StringComparer.Ordinal)) throw new ArgumentException("Unsupported document format.");
+        readOnly |= !CanEdit(format);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(15));
         cancellationToken = deadline.Token;
