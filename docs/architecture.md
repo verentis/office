@@ -1,5 +1,13 @@
 # ADR: prerequisite-gated Office
 
+This records the earlier synthetic-only milestone. The deployable backend now
+uses installation-bound platform delegation, and the live wrapper obtains a
+platform-issued embed ticket before its first navigation. Its browser CSP names
+only the registered workspace origin; the live CODE HTML proxy checks the
+file-scoped WOPI credential with the backend before setting exact workspace
+and Office frame ancestors. See [live local setup](live-local-setup.md).
+The harness behavior below remains deliberately separate from live Office.
+
 ## Decision
 
 Office owns a Nuxt 4/Vue/TypeScript wrapper and .NET 10 session boundary.

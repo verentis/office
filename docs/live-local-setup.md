@@ -91,7 +91,7 @@ with the workspace owner's approval instead.
 The changed Security/Resource services and gateway routes must be running before
 provisioning. If the old host does not expose those routes, coordinate its model
 reload first; an unconfigured live backend deliberately returns 503. After the
-helper stores the credentials and exact parent origin, reload the Office runtime
+helper stores the independent backend credentials, reload the Office runtime
 configuration as described below. No temporary test credential is needed.
 
 ```sh
@@ -125,13 +125,19 @@ The setup writes only these AppHost user-secrets:
 
 - `Office:ClientId`
 - `Parameters:office-backend-client-secret` (independent app credential)
-- `Office:ParentOrigin` (exact GUID workspace HTTPS origin)
 
-Additional exact origins can be configured with `Office:ParentOrigins:0`,
-`Office:ParentOrigins:1`, etc. No wildcards are accepted. The wrapper accepts init
-only from its parent window at a listed origin, then pins that origin for the
-session. This does not depend on `document.referrer`, which the workspace may
-suppress. CODE's frame-ancestor policy uses the same exact allowlist.
+There is no Office parent-host allowlist. Platform resolves the actual page
+origin against the active workspace-domain registry before issuing a one-use
+embed ticket or file delegation. The wrapper pins the browser's parent window
+and origin; the backend compares that origin to the platform-bound delegation
+before issuing a WOPI token. An expired embed ticket requires reopening the
+app from the workspace, which obtains a new ticket.
+
+If a workspace domain is revoked while a document is open, new frame loads and
+subsequent platform-backed callbacks must fail closed. The current MVP cannot
+transfer unsaved CODE memory to another host; keep the browser open and arrange
+recovery with the workspace owner rather than attempting to bypass domain
+revocation or forcing a conflicting write.
 
 Normal Aspire wires Security's `AppDelegations__PlatformOrigin` and Node's
 `AppDelegations__SecurityOrigin` to the public API origin. It routes the new
@@ -146,7 +152,9 @@ restarting the old `office-wopi` container. Coordinate that boundary with the
 environment owner; do not stop/recreate the whole stack or persistent storage
 incidentally. After model reload, changed services are Security, Resource,
 Node, API/frontend gateways, Office backend,
-Office wrapper, CODE (frame policy), and workspace.
+Office wrapper, CODE (frame policy), and workspace. CODE document HTML routes
+through the Office wrapper's server-side proxy; other CODE paths go directly
+to CODE. Do not route CODE WebSockets through the wrapper.
 
 Open `https://WORKSPACE-GUID.localtest.me/`. The generic
 `workspace.localtest.me` service alias is not a workspace and cannot complete
@@ -166,8 +174,12 @@ the Office session endpoint.
 - Security: two-minute single-use launch; five-minute opaque Node access;
   eight-hour absolute delegation ceiling. Renewal preserves its original
   response under native ETag concurrency and rechecks current authority.
-- Office: `POST /sessions` exchanges only the installation's launch credential.
-  CODE receives only its scoped WOPI credential.
+- Office: the platform-issued one-use embed ticket authorizes the wrapper's
+  initial frame response with an exact parent CSP. `POST /sessions` exchanges
+  the installation's launch credential and compares its bound origin to the
+  browser-observed parent before creating a scoped WOPI token. The CODE HTML
+  proxy replaces only the frame-ancestor directive after verifying that WOPI
+  token with the backend; it leaves the remaining CODE policy intact.
 - Node: stable-node metadata/content APIs with explicit `X-Branch`; content PUT
   uses strong `If-Match` and a durable `Idempotency-Key`.
 - Browser: `GET /sessions/{id}/status` requires a separate status credential.

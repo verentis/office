@@ -109,6 +109,18 @@ else
             statusCredential = session.StatusCredential, readOnly = session.ReadOnly, name = session.Name
         });
     }).WithMetadata(new RequestSizeLimitAttribute(16 * 1024));
+    app.MapPost("/frame-authorize", async (FrameAuthorizationRequest request, LiveOfficeStore store, CancellationToken token) =>
+    {
+        if (request.AccessToken is not { Length: 43 } || request.Scope is null)
+            return Results.Unauthorized();
+        var origin = await store.FramingOrigin(request.AccessToken, request.Scope, token);
+        return origin is null ? Results.Unauthorized() : Results.Json(new { parentOrigin = origin });
+    }).WithMetadata(new RequestSizeLimitAttribute(2048));
+    app.MapPost("/embed/authorize", async (EmbedAuthorizationRequest request, PlatformFileClient platform, CancellationToken token) =>
+    {
+        var admission = await platform.ExchangeEmbed(request.Ticket, editorOrigin, token);
+        return Results.Json(new { parentOrigin = admission.ParentOrigin });
+    }).WithMetadata(new RequestSizeLimitAttribute(1024));
     app.MapGet("/sessions/{id}/status", async (HttpContext context, string id, LiveOfficeStore store, CancellationToken token) =>
         Results.Json(await store.Status(id, StatusCredential(context), token)));
     app.MapPost("/sessions/{id}/saves", async (HttpContext context, string id, SaveRequest request, LiveOfficeStore store, CancellationToken token) =>
@@ -121,6 +133,7 @@ else
     });
     app.MapWopi();
 }
+
 app.Run();
 
 static Uri Origin(string value) =>
@@ -136,4 +149,6 @@ static string StatusCredential(HttpContext context)
 }
 
 public sealed record SaveRequest(long Generation);
+public sealed record FrameAuthorizationRequest(string AccessToken, FileScope Scope);
+public sealed record EmbedAuthorizationRequest(string Ticket);
 public partial class Program;

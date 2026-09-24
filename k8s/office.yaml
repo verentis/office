@@ -18,8 +18,9 @@ spec:
             - {name: http, containerPort: 3000}
           env:
             - {name: NUXT_BACKEND_URL, value: "http://office-wopi:8080"}
+            - {name: NUXT_CODE_URL, value: "http://office-code:9980"}
             - {name: NUXT_PUBLIC_SYNTHETIC_ONLY, value: "false"}
-            - {name: NUXT_PUBLIC_PARENT_ORIGINS, value: __PARENT_ORIGINS__}
+            - {name: NUXT_PUBLIC_WRAPPER_ORIGIN, value: "https://office.apps.verentis.dev"}
             - {name: NUXT_PUBLIC_EDITOR_ORIGIN, value: "https://office-code.apps.verentis.dev"}
             - {name: NUXT_PUBLIC_WOPI_ORIGIN, value: "https://office-wopi.apps.verentis.dev"}
           readinessProbe:
@@ -218,6 +219,12 @@ spec:
     - host: office-code.apps.verentis.dev
       http:
         paths:
+          - path: /browser
+            pathType: Prefix
+            backend:
+              service:
+                name: office-editor
+                port: {number: 3000}
           - path: /
             pathType: Prefix
             backend:

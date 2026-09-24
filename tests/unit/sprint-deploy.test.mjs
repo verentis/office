@@ -11,7 +11,6 @@ const env = {
     AKS_CLUSTER_NAME: 'aks-verentis-dev-southafricanorth',
     AKS_RESOURCE_GROUP: 'rg-verentis-platform-dev-southafricanorth',
     OFFICE_PLATFORM_ORIGIN: 'https://api.sprint-9.verentis.dev',
-    OFFICE_PARENT_ORIGINS: 'https://one.sprint-9.verentis.dev,https://two.sprint-9.verentis.dev',
     OFFICE_CLIENT_ID: id, OFFICE_BACKEND_SECRET: 'office-backend-auth',
     OFFICE_STATE_PVC: 'office-state',
     EDITOR_IMAGE: `acrverentis.azurecr.io/verentis/office-editor@sha256:${'a'.repeat(64)}`,
@@ -32,7 +31,7 @@ test('push targets sprint only and blocks missing cluster, PVC and backend secre
     const index = text => steps.findIndex(step => (step.name ?? '').includes(text));
     assert.ok(index('Validate required') < index('Azure login'));
     assert.ok(index('Check Office package and backend') < index('Azure login'));
-    assert.match(steps[index('Check Office package and backend')].run, /npm run check && dotnet test/);
+    assert.match(steps[index('Check Office package and backend')].run, /npm run check && npm run check:framing && dotnet test/);
     assert.ok(index('Verify CODE') > index('Validate required'));
     assert.ok(index('Verify CODE') < index('Build and push'));
     assert.ok(index('Check cluster prerequisites') < index('Build and push'));
@@ -60,7 +59,7 @@ test('three HTTPS origins, strict callbacks, pinned CODE and single persistent w
         assert.equal(service.spec.type, 'ClusterIP');
         assert.equal(ingress.spec.ingressClassName, 'nginx');
         assert.equal(ingress.spec.tls[0].hosts[0], ingress.spec.rules[0].host);
-        assert.equal(ingress.spec.rules[0].http.paths[0].backend.service.name, name);
+        assert.equal(ingress.spec.rules[0].http.paths.at(-1).backend.service.name, name);
         assert.equal(ingress.metadata.annotations['nginx.ingress.kubernetes.io/enable-access-log'], 'false');
         assert.equal(ingress.metadata.annotations['cert-manager.io/cluster-issuer'], 'letsencrypt-prod');
         assert.equal(resource('Deployment', name).metadata.namespace, 'verentis-apps');
@@ -68,14 +67,20 @@ test('three HTTPS origins, strict callbacks, pinned CODE and single persistent w
     assert.equal(resource('Ingress', 'office-editor').spec.rules[0].host, 'office.apps.verentis.dev');
     assert.equal(resource('Ingress', 'office-code').spec.rules[0].host, 'office-code.apps.verentis.dev');
     assert.equal(resource('Ingress', 'office-wopi').spec.rules[0].host, 'office-wopi.apps.verentis.dev');
+    const codePaths = resource('Ingress', 'office-code').spec.rules[0].http.paths;
+    assert.equal(codePaths[0].path, '/browser');
+    assert.equal(codePaths[0].backend.service.name, 'office-editor');
+    assert.equal(codePaths[1].backend.service.name, 'office-code');
     assert.equal(container('office-code').image, `${lock.repository}:${lock.tag}@${lock.digest}`);
     assert.match(variable('office-code', 'extra_params').value, /ssl\.ssl_verification=true/);
     assert.doesNotMatch(variable('office-code', 'extra_params').value, /ssl\.ssl_verification=false/);
     assert.equal(variable('office-code', 'aliasgroup1').value, 'https://office-wopi.apps.verentis.dev:443');
-    assert.equal(container('office-code').args[0], '--o:net.content_security_policy=frame-ancestors https://office.apps.verentis.dev https://one.sprint-9.verentis.dev https://two.sprint-9.verentis.dev;');
+    assert.equal(container('office-code').args[0], '--o:net.content_security_policy=frame-ancestors https://office.apps.verentis.dev;');
     assert.equal(variable('office-editor', 'NUXT_PUBLIC_SYNTHETIC_ONLY').value, 'false');
     assert.equal(variable('office-editor', 'NUXT_BACKEND_URL').value, 'http://office-wopi:8080');
-    assert.equal(variable('office-editor', 'NUXT_PUBLIC_PARENT_ORIGINS').value, env.OFFICE_PARENT_ORIGINS);
+    assert.equal(variable('office-editor', 'NUXT_CODE_URL').value, 'http://office-code:9980');
+    assert.equal(variable('office-editor', 'NUXT_PUBLIC_PARENT_ORIGINS'), undefined);
+    assert.equal(workflow.jobs.deploy.env.OFFICE_PARENT_ORIGINS, undefined);
     assert.equal(variable('office-wopi', 'Office__PlatformOrigin').value, env.OFFICE_PLATFORM_ORIGIN);
     assert.deepEqual(variable('office-wopi', 'Office__ClientSecret').valueFrom.secretKeyRef,
         { name: env.OFFICE_BACKEND_SECRET, key: 'ClientSecret', optional: false });
@@ -89,7 +94,7 @@ test('three HTTPS origins, strict callbacks, pinned CODE and single persistent w
     assert.equal(container('office-wopi').readinessProbe.httpGet.path, '/health');
 });
 
-test('missing settings, wrong environment, unsafe origins, mutable images and bad CODE pin fail closed', () => {
+test('missing settings, wrong environment, mutable images and bad CODE pin fail closed', () => {
     for (const key of Object.keys(env).filter(key => !key.endsWith('_IMAGE'))) {
         assert.throws(() => validate({ ...env, [key]: '' }), new RegExp(key));
     }
@@ -102,17 +107,10 @@ test('missing settings, wrong environment, unsafe origins, mutable images and ba
         ['AKS_RESOURCE_GROUP', 'rg-verentis-platform-production-nz'],
         ['AKS_RESOURCE_GROUP', 'rg-verentis-platform-dev-westus']
     ]) assert.throws(() => validate({ ...env, [name]: value }), /dev cluster location/);
-    for (const origin of [
-        '*', 'https://*.sprint-9.verentis.dev', 'https://one.uat.verentis.dev',
-        'https://one.sprint-1.verentis.dev', 'https://one.sprint-9.verentis.dev/',
-        'https://one.sprint-9.verentis.dev https://evil.invalid',
-        'https://one.sprint-9.verentis.dev,'
-    ]) assert.throws(() => renderSprint({ ...env, OFFICE_PARENT_ORIGINS: origin }), /PARENT_ORIGINS/);
     assert.deepEqual(validate({
         ...env,
-        OFFICE_PLATFORM_ORIGIN: 'https://api.sprint-10.verentis.dev',
-        OFFICE_PARENT_ORIGINS: 'https://one.sprint-10.verentis.dev'
-    }), ['https://one.sprint-10.verentis.dev']);
+        OFFICE_PLATFORM_ORIGIN: 'https://api.sprint-10.verentis.dev'
+    }), 'sprint-10');
     for (const image of ['office-editor:latest', `${env.ACR_LOGIN_SERVER}/verentis/office-editor:sha-tag`, env.BACKEND_IMAGE])
         assert.throws(() => renderSprint({ ...env, EDITOR_IMAGE: image }), /EDITOR_IMAGE/);
     assert.throws(() => renderSprint(env, { ...lock, digest: 'sha256:bad' }), /CODE image/);

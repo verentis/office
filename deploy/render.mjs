@@ -6,8 +6,6 @@ const name = /^[a-z][a-z0-9-]{1,30}$/;
 export function render(config) {
     if (typeof config.region !== 'string' || !name.test(config.region) || config.region !== config.dataRegion) throw new Error('Explicit matching processing/data region required.');
     if (![config.editorImage, config.backendImage].every(value => typeof value === 'string' && digest.test(value))) throw new Error('Immutable tested editor/backend images required.');
-    const host = new URL(config.parentOrigin);
-    if (host.protocol !== 'https:' || host.origin !== config.parentOrigin || host.username || host.password) throw new Error('Exact HTTPS parent origin required.');
     const lock = JSON.parse(readFileSync(new URL('./code.lock.json', import.meta.url)));
     return {
         name: `office-${config.region}`,
@@ -17,8 +15,7 @@ export function render(config) {
                 read_only: true,
                 environment: {
                     NUXT_BACKEND_URL: 'http://backend:8080',
-                    NUXT_PUBLIC_SYNTHETIC_ONLY: 'false',
-                    NUXT_PUBLIC_PARENT_ORIGIN: config.parentOrigin
+                    NUXT_PUBLIC_SYNTHETIC_ONLY: 'false'
                 },
                 labels: { 'office.region': config.region, 'office.live-integration': 'disabled' },
                 cap_drop: ['ALL'], security_opt: ['no-new-privileges:true']

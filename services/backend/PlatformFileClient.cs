@@ -6,12 +6,15 @@ using Office.Wopi;
 namespace Office.Backend;
 
 public sealed record BackendIdentity(Guid ClientId, string ClientSecret, Uri PlatformOrigin);
-public sealed record LaunchRequest(Guid DelegationId, Guid BackendClientId, string LaunchCredential);
+public sealed record LaunchRequest(Guid DelegationId, Guid BackendClientId, string LaunchCredential,
+    string ParentOrigin);
 public sealed record DelegatedCredentials(Guid DelegationId, Guid AccountId, Guid UserId, Guid WorkspaceId,
     Guid InstallationId, Guid NodeId, string Branch, bool Writable, string AccessToken,
-    DateTimeOffset AccessExpiresAt, string RenewalCredential, DateTimeOffset AbsoluteExpiresAt);
+    DateTimeOffset AccessExpiresAt, string RenewalCredential, DateTimeOffset AbsoluteExpiresAt,
+    string ParentOrigin);
 public sealed record PlatformFile(Guid NodeId, string Name, string Path, string MimeType, string Etag, long? Size);
 public sealed record PlatformContent(byte[] Bytes, string Revision);
+public sealed record EmbedAdmission(Guid WorkspaceId, Guid InstallationId, string ParentOrigin, string EntryUrl);
 
 public sealed class PlatformFailure(int status) : Exception("The authorized platform operation failed.")
 {
@@ -21,10 +24,28 @@ public sealed class PlatformFailure(int status) : Exception("The authorized plat
 /// <summary>Uses only public delegation and stable-node APIs; never follows download redirects.</summary>
 public sealed class PlatformFileClient(HttpClient http, BackendIdentity backend)
 {
+    public async Task<EmbedAdmission> ExchangeEmbed(string ticket, Uri editorOrigin, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(ticket) || ticket.Length > 512)
+            throw new PlatformFailure(401);
+        using var response = await http.PostAsJsonAsync(new Uri(backend.PlatformOrigin, "v1/app-embeds/exchange"),
+            new { ticket, clientId = backend.ClientId, backend.ClientSecret }, token);
+        RequireSuccess(response);
+        var admission = await response.Content.ReadFromJsonAsync<EmbedAdmission>(token);
+        if (admission is null || admission.WorkspaceId == Guid.Empty || admission.InstallationId == Guid.Empty ||
+            !IsExactHttpsOrigin(admission.ParentOrigin) ||
+            !Uri.TryCreate(admission.EntryUrl, UriKind.Absolute, out var entry) ||
+            entry.GetLeftPart(UriPartial.Authority) != editorOrigin.GetLeftPart(UriPartial.Authority) ||
+            entry.AbsolutePath != "/" || entry.Query.Length != 0 || entry.Fragment.Length != 0)
+            throw new PlatformFailure(502);
+        return admission;
+    }
+
     public async Task<DelegatedCredentials> Exchange(LaunchRequest request, CancellationToken token)
     {
         if (request.BackendClientId != backend.ClientId || request.DelegationId == Guid.Empty ||
-            string.IsNullOrWhiteSpace(request.LaunchCredential) || request.LaunchCredential.Length > 512)
+            string.IsNullOrWhiteSpace(request.LaunchCredential) || request.LaunchCredential.Length > 512 ||
+            !IsExactHttpsOrigin(request.ParentOrigin))
             throw new PlatformFailure(401);
         return await CredentialRequest("exchange", new
         {
@@ -55,10 +76,19 @@ public sealed class PlatformFileClient(HttpClient http, BackendIdentity backend)
             value.UserId == Guid.Empty || value.WorkspaceId == Guid.Empty || value.InstallationId == Guid.Empty ||
             value.NodeId == Guid.Empty || string.IsNullOrWhiteSpace(value.Branch) || value.Branch.Length > 256 ||
             value.AccessToken?.StartsWith("vda1.", StringComparison.Ordinal) != true ||
-            string.IsNullOrWhiteSpace(value.RenewalCredential) || value.AbsoluteExpiresAt <= DateTimeOffset.UtcNow)
+            string.IsNullOrWhiteSpace(value.RenewalCredential) || value.AbsoluteExpiresAt <= DateTimeOffset.UtcNow ||
+            !IsExactHttpsOrigin(value.ParentOrigin))
             throw new PlatformFailure(502);
         return value;
     }
+
+    private static bool IsExactHttpsOrigin(string? value) =>
+        value is { Length: > 0 and <= 256 } &&
+        Uri.TryCreate(value, UriKind.Absolute, out var origin) &&
+        origin.Scheme == Uri.UriSchemeHttps &&
+        !string.IsNullOrEmpty(origin.Host) &&
+        origin.UserInfo.Length == 0 &&
+        value == origin.GetLeftPart(UriPartial.Authority);
 
     public async Task<PlatformFile> Metadata(DelegatedCredentials credentials, CancellationToken token)
     {

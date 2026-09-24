@@ -1,7 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import formats from '../../apps/editor/shared/formats.json' with { type: 'json' };
-import { isTrustedMessage, parseParentOrigins, isTrustedParentMessage, childMessage, nextDirty, validateLaunch, validateLiveLaunch, saveConfirmed } from '../../apps/editor/shared/boundaries.mjs';
+import { isTrustedMessage, parseParentOrigins, isTrustedParentMessage, isPotentialParentMessage, childMessage, nextDirty, validateLaunch, validateLiveLaunch, saveConfirmed } from '../../apps/editor/shared/boundaries.mjs';
+
+test('live parent is pinned to the browser source and exact HTTPS origin', () => {
+    const source = {};
+    const event = { source, origin: 'https://custom.example.test' };
+    assert.equal(isPotentialParentMessage(event, source, ''), true);
+    assert.equal(isPotentialParentMessage(event, source, event.origin), true);
+    assert.equal(isPotentialParentMessage(event, {}, ''), false);
+    assert.equal(isPotentialParentMessage(event, source, 'https://other.example.test'), false);
+    for (const origin of ['null', 'http://custom.example.test', 'https://custom.example.test/path',
+        'https://custom.example.test/', 'https://user@custom.example.test', 'https://*.example.test',
+        'https://custom.example.test.evil.invalid']) {
+        assert.equal(isPotentialParentMessage({ source, origin }, source, 'https://custom.example.test'), false);
+    }
+    assert.equal(isPotentialParentMessage({ source, origin: 'https://*.example.test' }, source, ''), false);
+});
 
 test('workspace selection allows only explicitly configured parent origins', () => {
     const allowed = parseParentOrigins('https://one.localtest.me,https://two.localtest.me');

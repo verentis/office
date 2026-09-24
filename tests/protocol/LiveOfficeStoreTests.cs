@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Data.Sqlite;
 using Office.Backend;
 using Office.Wopi;
 using Xunit;
@@ -37,6 +38,72 @@ public sealed class LiveOfficeStoreTests
             Assert.Equal(403, (await store.LockAsync(session, "LOCK", "lock", null, default)).Status);
             Assert.Equal(403, (await Assert.ThrowsAsync<PlatformFailure>(() => store.BeginSave(launch.SessionId, launch.StatusCredential, 1, default))).Status);
         }
+    }
+
+    [Fact]
+    public async Task Launch_rejects_an_origin_other_than_the_platform_bound_parent_before_file_access()
+    {
+        using var fixture = new Fixture();
+        using var store = fixture.Start();
+        var request = fixture.Request() with { ParentOrigin = "https://another.example.test" };
+        Assert.Equal(403, (await Assert.ThrowsAsync<PlatformFailure>(() => store.Create(request, default))).Status);
+        Assert.Equal(0, fixture.Api.FileRequests);
+        Assert.Equal(0, fixture.Api.WriteCalls);
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(fixture.Directory, "office.db")}");
+        connection.Open();
+        using var count = connection.CreateCommand();
+        count.CommandText = "SELECT COUNT(*) FROM sessions";
+        Assert.Equal(0L, count.ExecuteScalar());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("http://workspace.example.test")]
+    [InlineData("https://workspace.example.test/path")]
+    [InlineData("https://user@workspace.example.test")]
+    public async Task Launch_rejects_a_missing_or_malformed_parent_origin(string origin)
+    {
+        using var fixture = new Fixture();
+        using var store = fixture.Start();
+        Assert.Equal(401, (await Assert.ThrowsAsync<PlatformFailure>(() =>
+            store.Create(fixture.Request() with { ParentOrigin = origin }, default))).Status);
+        Assert.Equal(0, fixture.Api.FileRequests);
+    }
+
+    [Fact]
+    public async Task Launch_rejects_a_malformed_platform_bound_origin()
+    {
+        using var fixture = new Fixture();
+        fixture.Api.BoundOrigin = "https://workspace.example.test/path";
+        using var store = fixture.Start();
+        Assert.Equal(502, (await Assert.ThrowsAsync<PlatformFailure>(() =>
+            store.Create(fixture.Request(), default))).Status);
+        Assert.Equal(0, fixture.Api.FileRequests);
+    }
+
+    [Fact]
+    public async Task Launch_accepts_an_exact_platform_bound_custom_domain()
+    {
+        using var fixture = new Fixture();
+        fixture.Api.BoundOrigin = "https://documents.customer.example";
+        using var store = fixture.Start();
+        var launch = await store.Create(fixture.Request() with { ParentOrigin = fixture.Api.BoundOrigin }, default);
+        Assert.NotNull(await store.AuthorizeAsync(launch.WopiCredential, launch.Scope, default));
+        Assert.Equal(fixture.Api.BoundOrigin, await store.FramingOrigin(launch.WopiCredential, launch.Scope, default));
+        Assert.Null(await store.FramingOrigin(launch.WopiCredential, launch.Scope with { File = Guid.NewGuid().ToString("D") }, default));
+        Assert.Equal(3, fixture.Api.FileRequests);
+    }
+
+    [Fact]
+    public async Task Embed_ticket_exchange_uses_confidential_backend_identity_and_exact_editor_entry()
+    {
+        using var fixture = new Fixture();
+        var result = await fixture.Platform.ExchangeEmbed("single-use-embed-ticket",
+            new Uri("https://office.apps.verentis.dev/"), default);
+        Assert.Equal(fixture.Api.BoundOrigin, result.ParentOrigin);
+        fixture.Api.EmbedEntryUrl = "https://unrelated.example/";
+        Assert.Equal(502, (await Assert.ThrowsAsync<PlatformFailure>(() => fixture.Platform.ExchangeEmbed(
+            "single-use-embed-ticket", new Uri("https://office.apps.verentis.dev/"), default))).Status);
     }
 
     [Fact]
@@ -207,10 +274,12 @@ public sealed class LiveOfficeStoreTests
         public MockPlatform Api { get; } = new();
         private readonly HttpClient http;
         public Fixture() { System.IO.Directory.CreateDirectory(Directory); http = new HttpClient(Api); }
+        public PlatformFileClient Platform => new(http, new(Api.Client, "private-client-secret", new Uri("https://api.example/")));
         public LiveOfficeStore Start() => new(Directory,
             DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(Directory, "keys"))),
-            new PlatformFileClient(http, new(Api.Client, "private-client-secret", new Uri("https://api.example/"))));
-        public Office.Backend.LaunchRequest Request() => new(Guid.NewGuid(), Api.Client, "single-use-launch");
+            Platform);
+        public Office.Backend.LaunchRequest Request() => new(Guid.NewGuid(), Api.Client, "single-use-launch",
+            "https://workspace.example.test");
         public void Dispose() { http.Dispose(); System.IO.Directory.Delete(Directory, true); }
     }
 
@@ -226,12 +295,15 @@ public sealed class LiveOfficeStoreTests
         public bool Revoked { get; set; }
         public bool LoseWriteResponse { get; set; }
         public bool LoseRenewalResponse { get; set; }
+        public string BoundOrigin { get; set; } = "https://workspace.example.test";
+        public string EmbedEntryUrl { get; set; } = "https://office.apps.verentis.dev/";
         public DateTimeOffset AccessExpiry { get; set; } = DateTimeOffset.UtcNow.AddMinutes(5);
         private DateTimeOffset AbsoluteExpiry { get; } = DateTimeOffset.UtcNow.AddHours(8);
         public string Revision { get; set; } = "opaque-initial";
         public byte[] Content { get; set; } = [1, 2, 3];
         public int Commits { get; private set; }
         public int WriteCalls { get; private set; }
+        public int FileRequests { get; private set; }
         public int RenewalCalls { get; private set; }
         private readonly Dictionary<string, PlatformFile> writes = [];
         public Dictionary<Guid, DelegatedCredentials> Renewals { get; } = [];
@@ -242,12 +314,21 @@ public sealed class LiveOfficeStoreTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             if (Revoked) return new(HttpStatusCode.Unauthorized);
+            if (request.RequestUri!.AbsolutePath == "/v1/app-embeds/exchange")
+            {
+                using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                Assert.Equal(Client, body.RootElement.GetProperty("clientId").GetGuid());
+                Assert.Equal("private-client-secret", body.RootElement.GetProperty("clientSecret").GetString());
+                Assert.Equal("single-use-embed-ticket", body.RootElement.GetProperty("ticket").GetString());
+                return Json(new EmbedAdmission(Workspace, Installation, BoundOrigin, EmbedEntryUrl));
+            }
             if (request.RequestUri!.AbsolutePath.Contains("app-delegations"))
             {
                 using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
                 var id = body.RootElement.GetProperty("delegationId").GetGuid();
                 var credentials = new DelegatedCredentials(id, Account, User, Workspace, Installation, Node,
-                    "main", Writable, "vda1.encrypted-access", AccessExpiry, "private-renewal-original", AbsoluteExpiry);
+                    "main", Writable, "vda1.encrypted-access", AccessExpiry, "private-renewal-original", AbsoluteExpiry,
+                    BoundOrigin);
                 if (request.RequestUri.AbsolutePath.EndsWith("/renew"))
                 {
                     RenewalCalls++;
@@ -255,7 +336,8 @@ public sealed class LiveOfficeStoreTests
                     if (!Renewals.TryGetValue(operation, out credentials))
                     {
                         credentials = new(id, Account, User, Workspace, Installation, Node, "main", Writable,
-                            "vda1.renewed-access", DateTimeOffset.UtcNow.AddMinutes(5), "private-renewal-next", AbsoluteExpiry);
+                            "vda1.renewed-access", DateTimeOffset.UtcNow.AddMinutes(5), "private-renewal-next", AbsoluteExpiry,
+                            BoundOrigin);
                         Renewals.Add(operation, credentials);
                     }
                     if (LoseRenewalResponse) { LoseRenewalResponse = false; throw new HttpRequestException("Lost response."); }
@@ -278,7 +360,7 @@ public sealed class LiveOfficeStoreTests
                 if (LoseWriteResponse) { LoseWriteResponse = false; throw new HttpRequestException("Lost response."); }
                 return Json(Metadata);
             }
-            if (request.RequestUri.AbsolutePath.EndsWith("/file")) return Json(Metadata);
+            if (request.RequestUri.AbsolutePath.EndsWith("/file")) { FileRequests++; return Json(Metadata); }
             var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Content) };
             response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue($"\"{Revision}\"");
             return response;

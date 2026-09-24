@@ -58,6 +58,8 @@ public sealed class LiveOfficeStore : IAsyncWopiStore, IDisposable
         {
             var credentials = await platform.Exchange(request, token);
             if (credentials.DelegationId != request.DelegationId) throw new PlatformFailure(401);
+            if (!string.Equals(credentials.ParentOrigin, request.ParentOrigin, StringComparison.Ordinal))
+                throw new PlatformFailure(403);
             var file = await platform.Metadata(credentials, token);
             if (!Discovery.Formats.Contains(Path.GetExtension(file.Name).TrimStart('.').ToLowerInvariant()))
                 throw new PlatformFailure(415);
@@ -111,6 +113,21 @@ public sealed class LiveOfficeStore : IAsyncWopiStore, IDisposable
             var document = Load<Document>(db, null, "documents", session.DocumentId)!;
             return new(Hash(token), scope, session.Credentials.UserId.ToString("D"),
                 session.ReadOnly, session.Credentials.AbsoluteExpiresAt.ToUnixTimeSeconds(), document.Revision);
+        }
+        finally { gate.Release(); }
+    }
+
+    public async Task<string?> FramingOrigin(string credential, FileScope scope, CancellationToken token)
+    {
+        await gate.WaitAsync(token);
+        try
+        {
+            using var db = Open();
+            var session = Find(db, "wopi", Hash(credential));
+            if (session is null || session.Scope != scope) return null;
+            session = await Refresh(session, token);
+            await platform.Metadata(session.Credentials, token);
+            return session.Credentials.ParentOrigin;
         }
         finally { gate.Release(); }
     }

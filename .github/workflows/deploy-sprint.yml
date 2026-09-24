@@ -21,7 +21,6 @@ jobs:
       AKS_CLUSTER_NAME: ${{ vars.AKS_CLUSTER_NAME }}
       AKS_RESOURCE_GROUP: ${{ vars.AKS_RESOURCE_GROUP }}
       OFFICE_PLATFORM_ORIGIN: ${{ vars.OFFICE_PLATFORM_ORIGIN }}
-      OFFICE_PARENT_ORIGINS: ${{ vars.OFFICE_PARENT_ORIGINS }}
       OFFICE_CLIENT_ID: ${{ vars.OFFICE_CLIENT_ID }}
       OFFICE_BACKEND_SECRET: ${{ vars.OFFICE_BACKEND_SECRET }}
       OFFICE_STATE_PVC: ${{ vars.OFFICE_STATE_PVC }}
@@ -38,7 +37,7 @@ jobs:
           dotnet-version: "10.0.x"
       - run: npm ci --no-audit --no-fund
       - name: Check Office package and backend
-        run: npm run check && dotnet test tests/protocol/Office.Protocol.Tests.csproj --verbosity quiet
+        run: npm run check && npm run check:framing && dotnet test tests/protocol/Office.Protocol.Tests.csproj --verbosity quiet
       - name: Validate required sprint settings and CODE pin
         run: node scripts/render-sprint.mjs --validate
       - name: Verify CODE manifest digest with registry

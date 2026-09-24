@@ -11,6 +11,7 @@ export interface Launch {
 export function isTrustedMessage(event: MessageEvent, source: Window | null, origin: string): boolean;
 export function parseParentOrigins(configuredOrigins: string): string[];
 export function isTrustedParentMessage(event: MessageEvent, source: Window | null, origins: string[], pinnedOrigin: string): boolean;
+export function isPotentialParentMessage(event: MessageEvent, source: Window | null, pinnedOrigin: string): boolean;
 export function childMessage(event: MessageEvent, source: Window | null, origin: string): { MessageId: string; Values?: Record<string, unknown> } | null;
 export function validateLaunch(value: unknown, editorOrigin: string, wopiOrigin: string): Launch;
 export function nextDirty(current: boolean, message: { MessageId: string; Values?: Record<string, unknown> }): boolean;

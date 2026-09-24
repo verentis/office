@@ -38,9 +38,13 @@ alias `office-wopi.localtest.me` and listens internally on 443, so CODE does
 CODE mounts only the public CA file read-only and uses
 `ssl.ssl_verification=true`, explicit `ssl.ca_file_path` / `storage.ssl.ca_file_path`
 and OpenSSL `SSL_CERT_FILE` pointing at `/etc/ssl/certs/office-rootCA.pem`.
-No CA private key or leaf private key is mounted into CODE. Its frame ancestors
-admit the Office wrapper and explicitly configured workspace origins, never
-arbitrary workspace/parent origins.
+No CA private key or leaf private key is mounted into CODE. The Office wrapper
+requires a one-use platform embed ticket on navigation and emits an exact
+workspace `frame-ancestors` policy. CODE document HTML travels through the
+Office server, which checks the WOPI session and replaces only its
+`frame-ancestors` directive with the exact workspace and Office origins.
+CODE WebSockets and non-browser routes remain directly served by CODE. There
+is no per-workspace host list and no wildcard framing policy.
 
 The backend retrieves discovery through CODE's trusted HTTPS origin. Nuxt uses
 the backend endpoint directly. CODE discovery → backend health → Nuxt `/_ready` determines
@@ -126,9 +130,10 @@ together. Never expose the harness's fixed identity as authentication.
 
 ## Runtime settings
 
-Deployable wrapper: `NUXT_BACKEND_URL`, `NUXT_PUBLIC_PARENT_ORIGIN` (exact trusted
-workspace origin); `NUXT_PUBLIC_SYNTHETIC_ONLY=false`. Test-only wrapper settings:
-`NUXT_PUBLIC_EDITOR_ORIGIN`, `NUXT_PUBLIC_WOPI_ORIGIN`, syntheticOnly=true.
+Deployable wrapper: `NUXT_BACKEND_URL`, `NUXT_CODE_URL`,
+`NUXT_PUBLIC_WRAPPER_ORIGIN`, `NUXT_PUBLIC_SYNTHETIC_ONLY=false`.
+`NUXT_PUBLIC_EDITOR_ORIGIN` and `NUXT_PUBLIC_WOPI_ORIGIN` identify the fixed CODE
+and WOPI hosts. Synthetic-only mode retains its separate exact test host.
 The live backend has **no enable-integration switch**.
 
 Harness: `DataDirectory`, `FixtureDirectory`, `EditorOrigin`, `CodeOrigin`,
@@ -161,7 +166,7 @@ removes the throwaway volume; this harness is not an unbounded hosted service.
 ## Reusable preparation (not a live topology)
 
 `deploy/render.mjs` accepts JSON with `region`, identical `dataRegion`,
-`parentOrigin`, `editorImage`, `backendImage`. Images must be immutable registry
+`editorImage`, `backendImage`. Images must be immutable registry
 references. See `npm run check:deploy` for non-routable render-test inputs.
 Render with `node deploy/render.mjs <your-approved-input.json>`.
 No actual environment, registry, credentials or resource owner is hard-coded.
@@ -203,13 +208,19 @@ without a cluster. No cloud deployment is performed by that check.
 Before enabling pushes, provision the following **GitHub Actions variables**,
 without defaults:
 
+Deploy the Platform Security and Workspace changes first, including the
+`/v1/app-embeds` and `/v1/workspaces/resolve-host` API gateway routes, the
+Security app-embed Cosmos container and `AppEmbeds:OfficeOrigin`. Office now
+fails closed without that contract; pushing its `main` branch before Platform
+is upgraded makes new live launches unavailable. Verify the gateway and
+container before the Office push.
+
 | Variable | Required value |
 | --- | --- |
 | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | Repository-specific federated OIDC identity and sprint tenant/subscription GUIDs. Grant only the needed ACR push, AKS credentials and namespace workload permissions. Federated trust must match Office `main`. |
 | `ACR_NAME`, `ACR_LOGIN_SERVER` | Sprint ACR name and matching `<name>.azurecr.io` host; AKS must be able to pull from it. |
 | `AKS_CLUSTER_NAME`, `AKS_RESOURCE_GROUP` | Sprint dev AKS cluster and its resource group. |
 | `OFFICE_PLATFORM_ORIGIN` | The target sprint API, e.g. `https://api.sprint-9.verentis.dev` (no trailing slash). |
-| `OFFICE_PARENT_ORIGINS` | Comma-separated, exact HTTPS origins under the same sprint domain (e.g. `https://my-workspace.sprint-9.verentis.dev`), no wildcard, trailing slash or spaces. Must match approved platform origins. |
 | `OFFICE_CLIENT_ID` | Nonzero GUID of a separately registered Office backend client, paired with its installation by the platform owner; never reuse the local/test client. |
 | `OFFICE_BACKEND_SECRET` | Name of a pre-provisioned Kubernetes Secret in `verentis-apps` with nonempty key `ClientSecret` (independent backend credential); **not** the secret value or a GitHub Actions secret. |
 | `OFFICE_STATE_PVC` | Name of a pre-provisioned, Bound, durable RWO/RWOP PVC in `verentis-apps`, with sufficient capacity for SQLite/WAL and the DataProtection `keys/` directory. Retain/back up the claim independently of deployments. |
@@ -241,7 +252,8 @@ The existing platform certificate for `*.verentis.dev` does **not** cover the
 `*.apps.verentis.dev` hosts. CODE's upstream HTTP terminates TLS at nginx;
 `ssl.ssl_verification=true` is retained for outgoing HTTPS WOPI callbacks and
 CODE advertises its public HTTPS host. Its frame ancestors include only the
-Office wrapper and the configured exact sprint workspace origins. All Office
+Office wrapper as its fixed built-in origin; the authenticated CODE HTML proxy
+replaces that directive with the platform-bound workspace origin as well. All Office
 ingresses disable nginx access logs because WOPI access tokens are in URLs;
 maintain the same prohibition in other proxies/APM, and do not log query strings.
 Do not route the WOPI ingress through a proxy that forwards tokens to logs.
@@ -255,8 +267,8 @@ certificates, HTTPS CODE discovery, wrapper `/_ready` and configured backend
 with the separately paired backend identity, confirm a save and reopen, and
 restart the backend to check session/keys survival before admitting users.
 Green process readiness does not prove platform pairing or durable saves.
-The deferred dynamic parent-origin validation change is **not part of this
-deployment**; do not push `main` or admit users until it is complete and reviewed.
+The browser/CODE framing flow must be validated against the platform's issued
+embed ticket and an actual registered workspace before admitting users.
 Marketplace package approval/publication is a separate action.
 
 **Sprint upgrade risk:** pushing changes to the Office repository can restart

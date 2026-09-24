@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Bridge, type HeaderActionRegistration } from '@verentis/sdk';
-import { childMessage, isTrustedParentMessage, parseParentOrigins, nextDirty, validateLaunch, validateLiveLaunch, saveConfirmed,
+import { childMessage, isTrustedParentMessage, isPotentialParentMessage, parseParentOrigins, nextDirty, validateLaunch, validateLiveLaunch, saveConfirmed,
     type Launch, type LiveLaunch, type SaveCheckpoint, type SaveStatus } from '../shared/boundaries.mjs';
 
 const config = useRuntimeConfig().public;
@@ -51,7 +51,9 @@ function guardParent(event: MessageEvent) {
     const type = event.data?.type;
     if (type === undefined) return;
     if (typeof type !== 'string' || (type.startsWith('verentis:') &&
-        (!isTrustedParentMessage(event, window.parent, parentOrigins, parentOrigin) ||
+        (!(synthetic
+            ? isTrustedParentMessage(event, window.parent, parentOrigins, parentOrigin)
+            : isPotentialParentMessage(event, window.parent, parentOrigin)) ||
             (type === 'verentis:init' && typeof event.data.context?.workspace?.id !== 'string')))) {
         event.stopImmediatePropagation();
     } else if (type === 'verentis:init') {
@@ -96,10 +98,10 @@ onMounted(async () => {
     window.addEventListener('beforeunload', beforeUnload);
     if (window.parent !== window) {
         try {
-            parentOrigins = parseParentOrigins(config.parentOrigins || config.parentOrigin);
+            if (synthetic) parentOrigins = parseParentOrigins(config.parentOrigins || config.parentOrigin);
             // The capture-phase guard authenticates and pins init before the
             // SDK sees it, including hosts with a no-referrer policy.
-            bridge = new Bridge(parentOrigins.length === 1 ? parentOrigins[0] : undefined);
+            bridge = new Bridge(synthetic && parentOrigins.length === 1 ? parentOrigins[0] : undefined);
             bridge.sendReady([]);
             const initialized = await Promise.race([
                 bridge.waitForInit(),
@@ -118,7 +120,9 @@ onMounted(async () => {
                 }, () => { showDetails.value = !showDetails.value; });
                 status.value = 'Authorizing the installed backend for this file…';
                 const credential = await bridge.requestBackendCredential();
-                const response = await $fetch('/api/sessions', { method: 'POST', body: credential });
+                const response = await $fetch('/api/sessions', {
+                    method: 'POST', body: { ...credential, parentOrigin }
+                });
                 if (destroyed) return;
                 launch.value = validateLiveLaunch(response, config.editorOrigin, config.wopiOrigin, initialized.context);
                 bridge.setTitle(`Office — ${launch.value.name}`);

@@ -50,7 +50,6 @@ if not isinstance(secret, str) or not secret.startswith("vab_"):
     raise SystemExit("The backend registration returned an invalid credential.")
 settings = {
     "Office:ClientId": client_id,
-    "Office:ParentOrigin": f"https://{workspace}.localtest.me",
     "Parameters:office-backend-client-secret": secret,
 }
 stored = subprocess.run(["dotnet", "user-secrets", "set", "--project", str(Path(args.apphost).resolve())],

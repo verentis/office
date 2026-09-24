@@ -17,7 +17,7 @@ for (const file of ['deploy/editor.Dockerfile', 'deploy/backend.Dockerfile', 'de
 }
 mkdirSync('artifacts/deploy', { recursive: true });
 for (const region of ['eu-test', 'us-test']) {
-    const config = { region, dataRegion: region, parentOrigin: 'https://workspace.example.invalid', editorImage: `example.invalid/office-editor@sha256:${'1'.repeat(64)}`, backendImage: `example.invalid/office-backend@sha256:${'2'.repeat(64)}` };
+    const config = { region, dataRegion: region, editorImage: `example.invalid/office-editor@sha256:${'1'.repeat(64)}`, backendImage: `example.invalid/office-backend@sha256:${'2'.repeat(64)}` };
     const result = render(config);
     assert.equal(result.services.editor.environment.NUXT_PUBLIC_SYNTHETIC_ONLY, 'false');
     assert.doesNotMatch(JSON.stringify(result), /harness|\/test|storage.ssl.ssl_verification/);

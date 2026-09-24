@@ -8,6 +8,7 @@ export default defineNuxtConfig({
     compatibilityDate: '2026-02-01',
     devtools: { enabled: false },
     ssr: false,
+    nitro: { externals: { inline: [/frame-policy\.mjs$/] } },
     devServer: {
         https: process.env.NUXT_HTTPS_CERT && process.env.NUXT_HTTPS_KEY
             ? { cert: process.env.NUXT_HTTPS_CERT, key: process.env.NUXT_HTTPS_KEY }
@@ -15,8 +16,10 @@ export default defineNuxtConfig({
     },
     runtimeConfig: {
         backendUrl: 'http://backend:8080',
+        codeUrl: 'http://code:9980',
         public: {
             syntheticOnly: false,
+            wrapperOrigin: 'https://office.localtest.me',
             parentOrigin: '',
             parentOrigins: '',
             editorOrigin: 'https://code.localhost:8443',

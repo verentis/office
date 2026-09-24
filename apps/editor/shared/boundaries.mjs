@@ -1,3 +1,5 @@
+import { exactHttpsOrigin } from './frame-policy.mjs';
+
 export function isTrustedMessage(event, source, origin) {
     return Boolean(source && origin && event.source === source && event.origin === origin);
 }
@@ -15,6 +17,15 @@ export function parseParentOrigins(configuredOrigins) {
 
 export function isTrustedParentMessage(event, source, origins, pinnedOrigin) {
     return origins.includes(event.origin) && isTrustedMessage(event, source, pinnedOrigin || event.origin);
+}
+
+export function isPotentialParentMessage(event, source, pinnedOrigin) {
+    if (!source || event.source !== source || pinnedOrigin && event.origin !== pinnedOrigin) return false;
+    try {
+        return exactHttpsOrigin(event.origin) === event.origin;
+    } catch {
+        return false;
+    }
 }
 
 export function childMessage(event, source, origin) {

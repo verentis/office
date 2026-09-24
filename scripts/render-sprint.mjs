@@ -6,7 +6,7 @@ const root = new URL('../', import.meta.url);
 const required = [
     'AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID',
     'ACR_NAME', 'ACR_LOGIN_SERVER', 'AKS_CLUSTER_NAME', 'AKS_RESOURCE_GROUP',
-    'OFFICE_PLATFORM_ORIGIN', 'OFFICE_PARENT_ORIGINS', 'OFFICE_CLIENT_ID',
+    'OFFICE_PLATFORM_ORIGIN', 'OFFICE_CLIENT_ID',
     'OFFICE_BACKEND_SECRET', 'OFFICE_STATE_PVC'
 ];
 const dnsName = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -38,19 +38,14 @@ export function validate(env, lock = JSON.parse(readFileSync(new URL('deploy/cod
     const sprint = /^https:\/\/api\.(sprint-[a-z0-9]+(?:-[a-z0-9]+)*)\.verentis\.dev$/.exec(env.OFFICE_PLATFORM_ORIGIN);
     if (!sprint)
         throw new Error('OFFICE_PLATFORM_ORIGIN must be the sprint platform API origin');
-    const parents = env.OFFICE_PARENT_ORIGINS.split(',');
-    const parentHost = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
-    if (!parents.length || new Set(parents).size !== parents.length ||
-        parents.some(origin => !new RegExp(`^https://${parentHost}\\.${sprint[1]}\\.verentis\\.dev$`).test(origin)))
-        throw new Error('OFFICE_PARENT_ORIGINS must contain unique exact sprint HTTPS workspace origins');
     if (lock.repository !== 'docker.io/collabora/code' ||
         !/^\d+(?:\.\d+)+$/.test(lock.tag) || !digest.test(lock.digest))
         throw new Error('Invalid pinned CODE image in deploy/code.lock.json');
-    return parents;
+    return sprint[1];
 }
 
 export function renderSprint(env, lock = JSON.parse(readFileSync(new URL('deploy/code.lock.json', root)))) {
-    const parents = validate(env, lock);
+    validate(env, lock);
     for (const name of ['EDITOR_IMAGE', 'BACKEND_IMAGE']) {
         if (!new RegExp(`^${env.ACR_LOGIN_SERVER.replaceAll('.', '\\.')}/verentis/office-(?:editor|backend)@sha256:[a-f0-9]{64}$`).test(env[name] ?? '') ||
             !env[name].includes(`office-${name === 'EDITOR_IMAGE' ? 'editor' : 'backend'}@`))
@@ -66,13 +61,12 @@ export function renderSprint(env, lock = JSON.parse(readFileSync(new URL('deploy
         __EDITOR_IMAGE__: env.EDITOR_IMAGE,
         __BACKEND_IMAGE__: env.BACKEND_IMAGE,
         __CODE_IMAGE__: `${lock.repository}:${lock.tag}@${lock.digest}`,
-        __PARENT_ORIGINS__: parents.join(','),
         __CLIENT_ID__: env.OFFICE_CLIENT_ID,
         __BACKEND_SECRET__: env.OFFICE_BACKEND_SECRET,
         __STATE_PVC__: env.OFFICE_STATE_PVC,
         __PLATFORM_ORIGIN__: env.OFFICE_PLATFORM_ORIGIN,
         __CODE_PARAMS__: params,
-        __CODE_FRAME_POLICY__: `--o:net.content_security_policy=frame-ancestors https://office.apps.verentis.dev ${parents.join(' ')};`
+        __CODE_FRAME_POLICY__: '--o:net.content_security_policy=frame-ancestors https://office.apps.verentis.dev;'
     };
     const documents = parseAllDocuments(readFileSync(new URL('k8s/office.yaml', root), 'utf8'));
     if (documents.some(doc => doc.errors.length)) throw new Error('Invalid k8s/office.yaml');
