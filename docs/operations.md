@@ -197,7 +197,7 @@ can lose unsaved synthetic edits; verify fresh reopen before stopping the stack.
 
 ## Sprint AKS deployment
 
-`deploy-sprint.yml` deploys on pushes to Office `main`, **only** to the sprint
+`deploy-sprint.yml` deploys on pushes to Office `feat/**` branches, **only** to the sprint
 dev AKS `verentis-apps` namespace. It does not deploy UAT/production or enable
 `manifests/environments/production.yaml`. It builds the live editor and WOPI
 backend from this commit and applies their ACR **manifest digests** and the
@@ -205,8 +205,18 @@ official CODE digest in `deploy/code.lock.json`; it never deploys the synthetic
 harness. `npm run check:deploy` runs the offline shape and failure contract
 without a cluster. No cloud deployment is performed by that check.
 
-Before enabling pushes, provision the following **GitHub Actions variables**,
-without defaults:
+Create the Office GitHub environment `sprint` with deployment branches restricted
+to `feat/**` and a required reviewer. The deployment job reads the following
+**environment secrets** (not repository variables). GitHub variables are not
+automatically displayed to the public, but workflow code can print their
+values in public logs; secrets are encrypted and log-masked, though a malicious
+workflow run by someone with write access can still exfiltrate them. Review
+feature-branch changes before approving a deployment. Do not run this workflow
+from a fork or enable pull-request deployment.
+The separate secret-free checks also run on feature pushes without waiting for
+deployment approval. Approving the `sprint` environment releases the deployment
+job; an unapproved run cannot access the environment secrets or request its
+Azure OIDC credential.
 
 Deploy the Platform Security and Workspace changes first, including the
 `/v1/app-embeds` and `/v1/workspaces/resolve-host` API gateway routes, the
@@ -215,17 +225,17 @@ fails closed without that contract; pushing its `main` branch before Platform
 is upgraded makes new live launches unavailable. Verify the gateway and
 container before the Office push.
 
-| Variable | Required value |
+| Environment secret | Required value |
 | --- | --- |
-| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | Repository-specific federated OIDC identity and sprint tenant/subscription GUIDs. Grant only the needed ACR push, AKS credentials and namespace workload permissions. Federated trust must match Office `main`. |
-| `ACR_NAME`, `ACR_LOGIN_SERVER` | Sprint ACR name and matching `<name>.azurecr.io` host; AKS must be able to pull from it. |
-| `AKS_CLUSTER_NAME`, `AKS_RESOURCE_GROUP` | Sprint dev AKS cluster and its resource group. |
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | Sprint OIDC identity and tenant/subscription GUIDs, available from Platform's `sprint` environment variables. This identity **must** separately trust `repo:verentis/office:environment:sprint` (not just the Platform repository); otherwise Azure login fails. Limit its permissions to sprint ACR push and AKS deployment. |
+| `ACR_NAME`, `ACR_LOGIN_SERVER` | Sprint ACR name and matching `<name>.azurecr.io` host, available from Platform's repository variables; AKS must be able to pull from it. |
+| `AKS_CLUSTER_NAME`, `AKS_RESOURCE_GROUP` | Sprint dev AKS cluster and resource group, available from Platform's `sprint` environment variables. |
 | `OFFICE_PLATFORM_ORIGIN` | The target sprint API, e.g. `https://api.sprint-9.verentis.dev` (no trailing slash). |
 | `OFFICE_CLIENT_ID` | Nonzero GUID of a separately registered Office backend client, paired with its installation by the platform owner; never reuse the local/test client. |
-| `OFFICE_BACKEND_SECRET` | Name of a pre-provisioned Kubernetes Secret in `verentis-apps` with nonempty key `ClientSecret` (independent backend credential); **not** the secret value or a GitHub Actions secret. |
+| `OFFICE_BACKEND_SECRET` | **Name**, not value, of a pre-provisioned Kubernetes Secret in `verentis-apps` with nonempty key `ClientSecret` (independent backend credential). The credential itself remains only in Kubernetes. |
 | `OFFICE_STATE_PVC` | Name of a pre-provisioned, Bound, durable RWO/RWOP PVC in `verentis-apps`, with sufficient capacity for SQLite/WAL and the DataProtection `keys/` directory. Retain/back up the claim independently of deployments. |
 
-The workflow checks all variables, lock syntax and the pre-provisioned namespace,
+The workflow checks all settings, lock syntax and the pre-provisioned namespace,
 secret and PVC before building, and checks the objects again before apply. It
 checks that `ClientSecret` is nonempty without printing its value; missing inputs fail rather
 than deploying an unconfigured backend. Secret values are read only by the pod

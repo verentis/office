@@ -18,14 +18,19 @@ const env = {
 };
 const lock = JSON.parse(readFileSync(new URL('../../deploy/code.lock.json', import.meta.url)));
 const workflow = parse(readFileSync(new URL('../../.github/workflows/deploy-sprint.yml', import.meta.url), 'utf8'));
+const checks = parse(readFileSync(new URL('../../.github/workflows/checks.yml', import.meta.url), 'utf8'));
 const objects = parseAllDocuments(renderSprint(env)).map(doc => doc.toJS());
 const resource = (kind, name) => objects.find(item => item.kind === kind && item.metadata.name === name);
 const container = name => resource('Deployment', name).spec.template.spec.containers[0];
 const variable = (name, key) => container(name).env.find(entry => entry.name === key);
 
 test('push targets sprint only and blocks missing cluster, PVC and backend secret before build/apply', () => {
-    assert.deepEqual(workflow.on.push.branches, ['main']);
+    assert.deepEqual(workflow.on.push.branches, ['feat/**']);
     assert.equal(workflow.on.workflow_dispatch, undefined);
+    assert.equal(workflow.on.pull_request, undefined);
+    assert.deepEqual(checks.on.push.branches, ['main', 'feat/**']);
+    assert.equal(workflow.jobs.deploy.if, "github.repository == 'verentis/office'");
+    assert.equal(workflow.jobs.deploy.environment, 'sprint');
     assert.equal(workflow.permissions['id-token'], 'write');
     const steps = workflow.jobs.deploy.steps;
     const index = text => steps.findIndex(step => (step.name ?? '').includes(text));
@@ -46,9 +51,17 @@ test('push targets sprint only and blocks missing cluster, PVC and backend secre
     assert.match(steps[index('Recheck prerequisites')].run, /certificate\/"\$name"-tls/);
     assert.match(steps[index('Recheck prerequisites')].run, /h\.draining!==false/);
     assert.doesNotMatch(JSON.stringify(workflow), /uat\.verentis|production\.yaml|manifests\/environments/);
-    for (const name of ['ACR_NAME', 'ACR_LOGIN_SERVER', 'OFFICE_PLATFORM_ORIGIN', 'OFFICE_STATE_PVC', 'OFFICE_BACKEND_SECRET']) {
-        assert.match(workflow.jobs.deploy.env[name], /vars\./);
+    for (const name of [
+        'AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID',
+        'ACR_NAME', 'ACR_LOGIN_SERVER', 'AKS_CLUSTER_NAME', 'AKS_RESOURCE_GROUP',
+        'OFFICE_PLATFORM_ORIGIN', 'OFFICE_CLIENT_ID', 'OFFICE_BACKEND_SECRET', 'OFFICE_STATE_PVC'
+    ]) {
+        assert.equal(workflow.jobs.deploy.env[name], '${{ secrets.' + name + ' }}');
     }
+    for (const name of ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID'])
+        assert.equal(steps[index('Azure login')]['with'][name.slice('AZURE_'.length).toLowerCase().replaceAll('_', '-')],
+            '${{ secrets.' + name + ' }}');
+    assert.doesNotMatch(JSON.stringify(workflow), /\$\{\{\s*vars\./);
 });
 
 test('three HTTPS origins, strict callbacks, pinned CODE and single persistent writer survive pod recreation', () => {

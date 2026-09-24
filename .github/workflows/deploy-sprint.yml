@@ -1,7 +1,7 @@
 name: Deploy Office to sprint AKS
 on:
   push:
-    branches: [main]
+    branches: ['feat/**']
 permissions:
   id-token: write
   contents: read
@@ -10,20 +10,22 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
+    if: github.repository == 'verentis/office'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    environment: sprint
     env:
-      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      ACR_NAME: ${{ vars.ACR_NAME }}
-      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
-      AKS_CLUSTER_NAME: ${{ vars.AKS_CLUSTER_NAME }}
-      AKS_RESOURCE_GROUP: ${{ vars.AKS_RESOURCE_GROUP }}
-      OFFICE_PLATFORM_ORIGIN: ${{ vars.OFFICE_PLATFORM_ORIGIN }}
-      OFFICE_CLIENT_ID: ${{ vars.OFFICE_CLIENT_ID }}
-      OFFICE_BACKEND_SECRET: ${{ vars.OFFICE_BACKEND_SECRET }}
-      OFFICE_STATE_PVC: ${{ vars.OFFICE_STATE_PVC }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+      AKS_CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
+      AKS_RESOURCE_GROUP: ${{ secrets.AKS_RESOURCE_GROUP }}
+      OFFICE_PLATFORM_ORIGIN: ${{ secrets.OFFICE_PLATFORM_ORIGIN }}
+      OFFICE_CLIENT_ID: ${{ secrets.OFFICE_CLIENT_ID }}
+      OFFICE_BACKEND_SECRET: ${{ secrets.OFFICE_BACKEND_SECRET }}
+      OFFICE_STATE_PVC: ${{ secrets.OFFICE_STATE_PVC }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -45,9 +47,9 @@ jobs:
       - name: Azure login (repository OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Check cluster prerequisites
         shell: bash
         run: |

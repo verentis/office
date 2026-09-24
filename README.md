@@ -100,12 +100,14 @@ Stop with `docker compose -f dev/compose.yaml down` (preserves the database).
 - `deploy` — pinned image builds and reusable regional rendering.
 - `k8s` — sprint-only live workload template; no marketplace package publication.
 - `.github/workflows` — secret-free checks, manual unsigned release preparation,
-  and an OIDC-authenticated main-push sprint AKS deployment (not UAT/production).
+  and an OIDC-authenticated `feat/**`-push sprint AKS deployment using a protected
+  GitHub environment (not UAT/production).
 
 See [architecture](docs/architecture.md), [API](docs/api.md),
 [operations/recovery](docs/operations.md), [security](SECURITY.md),
 [contributing](CONTRIBUTING.md) and [third-party inventory](THIRD-PARTY-NOTICES.md).
 The existing Apache-2.0 license is unchanged. This repository does not provision
 cloud identities, permissions, secrets or storage, and does not publish packages.
-Do not push `main` until deferred dynamic parent-origin validation is complete
-and the sprint deployment prerequisites and rollout gate have been approved.
+Do not deploy until the Platform embed/host registry contract, the Office-specific
+backend credentials and persistent state, and the sprint rollout prerequisites
+described in operations have been approved.
