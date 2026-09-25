@@ -59,8 +59,13 @@ jobs:
           set -euo pipefail
           az aks get-credentials --resource-group "$AKS_RESOURCE_GROUP" --name "$AKS_CLUSTER_NAME" --overwrite-existing
           kubectl get namespace verentis-apps -o name
-          kubectl get pvc office-state -n verentis-apps -o json |
-            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.status.phase!=="Bound"||!p.spec.accessModes.some(m=>["ReadWriteOnce","ReadWriteOncePod"].includes(m)))throw Error("Office state PVC must be Bound and single-node/single-pod writable")})'
+          storage_class="$(kubectl get storageclass default -o json)"
+          printf '%s' "$storage_class" |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const c=JSON.parse(s);if(c.provisioner!=="disk.csi.azure.com"||!["WaitForFirstConsumer","Immediate"].includes(c.volumeBindingMode))throw Error("Office needs the expected Azure Disk default storage class")})'
+          kubectl apply -f k8s/state-pvc.yaml
+          state_pvc="$(kubectl get pvc office-state -n verentis-apps -o json)"
+          printf '%s' "$state_pvc" |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.spec.storageClassName!=="default"||p.spec.resources.requests.storage!=="10Gi"||p.spec.accessModes.length!==1||p.spec.accessModes[0]!=="ReadWriteOnce"||!["Pending","Bound"].includes(p.status.phase))throw Error("Office state PVC must use the expected single-writer Azure Disk claim")})'
       - name: Provision Office backend credential
         env:
           OFFICE_CLIENT_SECRET: ${{ secrets.OFFICE_CLIENT_SECRET }}
@@ -101,12 +106,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          kubectl get pvc office-state -n verentis-apps -o json |
-            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.status.phase!=="Bound"||!p.spec.accessModes.some(m=>["ReadWriteOnce","ReadWriteOncePod"].includes(m)))throw Error("Office state PVC is not Bound for a single writer")})'
+          state_pvc="$(kubectl get pvc office-state -n verentis-apps -o json)"
+          printf '%s' "$state_pvc" |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.spec.storageClassName!=="default"||p.spec.resources.requests.storage!=="10Gi"||p.spec.accessModes.length!==1||p.spec.accessModes[0]!=="ReadWriteOnce"||!["Pending","Bound"].includes(p.status.phase))throw Error("Office state PVC no longer matches the approved single-writer claim")})'
           kubectl describe secret office-backend-auth -n verentis-apps |
             grep -Eq '^ClientSecret:[[:space:]]*[1-9][0-9]* bytes$' ||
             { echo "::error::Office backend Secret needs a nonempty ClientSecret key"; exit 1; }
           node scripts/render-sprint.mjs | kubectl apply -f -
+          kubectl wait -n verentis-apps --for=jsonpath='{.status.phase}'=Bound pvc/office-state --timeout=10m
           for name in office-wopi office-code office-editor; do
             kubectl rollout status deployment/"$name" -n verentis-apps --timeout=10m
           done

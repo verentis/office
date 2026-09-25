@@ -288,16 +288,20 @@ Marketplace admission.
 | `OFFICE_CLIENT_ID` | Nonzero GUID of the publisher-owned Office service for this environment, referenced by the signed package and approved per workspace; never reuse the local/test client. |
 | `OFFICE_CLIENT_SECRET` | **Value** of the publisher-owned Office client secret, stored in the GitHub `sprint` environment as an encrypted secret. The workflow provisions `verentis-apps/office-backend-auth` with key `ClientSecret` after Azure login; do not enter a Kubernetes resource name here. |
 
-Provision a durable RWO/RWOP PVC named `office-state` in `verentis-apps` once
-in the verified sprint AKS cluster, using the cluster's approved storage class
-and capacity for SQLite/WAL and the DataProtection `keys/` directory. The
-claim name is fixed in the Office manifest; it is not a GitHub setting. Retain
-and back up the claim independently of deployments.
+The workflow creates a 10Gi, single-writer Azure Disk claim named `office-state`
+in `verentis-apps` from `k8s/state-pvc.yaml`. The cluster's `default` StorageClass
+must use the Azure Disk CSI provisioner. It has `WaitForFirstConsumer` binding
+in sprint, so the claim stays Pending until the backend pod is scheduled;
+the workflow verifies it becomes Bound after applying the workloads. The
+claim name is fixed in the Office manifest; it is not a GitHub setting.
+Retain and back up the whole claim independently of deployments. The default
+class has a `Delete` reclaim policy: deleting the claim destroys the disk.
 
-The workflow checks all settings, lock syntax, namespace and pre-provisioned
-Bound PVC before building. It securely supplies the GitHub credential to
-Kubernetes through stdin, then checks the PVC and nonempty Kubernetes
-`ClientSecret` key again before apply. Missing inputs fail rather than
+The workflow checks all settings, lock syntax and namespace, creates or
+verifies the PVC before building, and securely supplies the GitHub credential
+to Kubernetes through stdin. It rechecks the claim and nonempty Kubernetes
+`ClientSecret` key before apply and waits for the claim to bind. Missing inputs
+or unexpected storage classes fail rather than
 deploying an unconfigured backend. The GitHub credential is available only
 to the validation and provisioning steps, not to build actions or rendered
 manifests; the pod reads it from Kubernetes. Never put it in workflow files,

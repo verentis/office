@@ -19,6 +19,7 @@ const env = {
 const lock = JSON.parse(readFileSync(new URL('../../deploy/code.lock.json', import.meta.url)));
 const workflow = parse(readFileSync(new URL('../../.github/workflows/deploy-sprint.yml', import.meta.url), 'utf8'));
 const checks = parse(readFileSync(new URL('../../.github/workflows/checks.yml', import.meta.url), 'utf8'));
+const statePvc = parse(readFileSync(new URL('../../k8s/state-pvc.yaml', import.meta.url), 'utf8'));
 const objects = parseAllDocuments(renderSprint(env)).map(doc => doc.toJS());
 const resource = (kind, name) => objects.find(item => item.kind === kind && item.metadata.name === name);
 const container = name => resource('Deployment', name).spec.template.spec.containers[0];
@@ -44,8 +45,11 @@ test('push targets sprint only and provisions the credential after checking the 
     assert.ok(index('Provision Office backend credential') < index('Build and push'));
     assert.ok(index('Recheck prerequisites') > index('Build and push backend'));
     const check = steps[index('Check cluster prerequisites')].run;
-    assert.match(check, /status\.phase!=="Bound"/);
     assert.match(check, /kubectl get namespace verentis-apps/);
+    assert.match(check, /kubectl get storageclass default -o json/);
+    assert.match(check, /c\.provisioner!=="disk\.csi\.azure\.com"/);
+    assert.match(check, /kubectl apply -f k8s\/state-pvc\.yaml/);
+    assert.match(check, /\["Pending","Bound"\]/);
     assert.match(check, /kubectl get pvc office-state/);
     assert.doesNotMatch(check, /kubectl (create|apply).*namespace|kubectl get secret.*-o json/);
     const provision = steps[index('Provision Office backend credential')];
@@ -61,6 +65,9 @@ test('push targets sprint only and provisions the credential after checking the 
     assert.equal(workflow.jobs.deploy.env.OFFICE_STATE_PVC, undefined);
     assert.match(steps[index('Recheck prerequisites')].run, /kubectl describe secret office-backend-auth/);
     assert.match(steps[index('Recheck prerequisites')].run, /grep -Eq '\^ClientSecret:/);
+    assert.match(steps[index('Recheck prerequisites')].run, /kubectl wait -n verentis-apps --for=jsonpath='\{\.status\.phase\}'=Bound pvc\/office-state --timeout=10m/);
+    assert.ok(steps[index('Recheck prerequisites')].run.indexOf('node scripts/render-sprint.mjs | kubectl apply -f -') <
+        steps[index('Recheck prerequisites')].run.indexOf("kubectl wait -n verentis-apps"));
     assert.match(steps[index('Recheck prerequisites')].run, /kubectl rollout status/);
     assert.match(steps[index('Recheck prerequisites')].run, /certificate\/"\$name"-tls/);
     assert.match(steps[index('Recheck prerequisites')].run, /h\.draining!==false/);
@@ -79,6 +86,12 @@ test('push targets sprint only and provisions the credential after checking the 
 });
 
 test('three HTTPS origins, strict callbacks, pinned CODE and single persistent writer survive pod recreation', () => {
+    assert.equal(statePvc.kind, 'PersistentVolumeClaim');
+    assert.equal(statePvc.metadata.name, 'office-state');
+    assert.equal(statePvc.metadata.namespace, 'verentis-apps');
+    assert.equal(statePvc.spec.storageClassName, 'default');
+    assert.deepEqual(statePvc.spec.accessModes, ['ReadWriteOnce']);
+    assert.equal(statePvc.spec.resources.requests.storage, '10Gi');
     assert.equal(objects.length, 9);
     for (const name of ['office-editor', 'office-code', 'office-wopi']) {
         const service = resource('Service', name);
