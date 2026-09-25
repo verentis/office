@@ -24,8 +24,6 @@ jobs:
       AKS_RESOURCE_GROUP: ${{ secrets.AKS_RESOURCE_GROUP }}
       OFFICE_PLATFORM_ORIGIN: ${{ secrets.OFFICE_PLATFORM_ORIGIN }}
       OFFICE_CLIENT_ID: ${{ secrets.OFFICE_CLIENT_ID }}
-      OFFICE_BACKEND_SECRET: ${{ secrets.OFFICE_BACKEND_SECRET }}
-      OFFICE_STATE_PVC: ${{ secrets.OFFICE_STATE_PVC }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -41,7 +39,12 @@ jobs:
       - name: Check Office package and backend
         run: npm run check && npm run check:framing && dotnet test tests/protocol/Office.Protocol.Tests.csproj --verbosity quiet
       - name: Validate required sprint settings and CODE pin
-        run: node scripts/render-sprint.mjs --validate
+        env:
+          OFFICE_CLIENT_SECRET: ${{ secrets.OFFICE_CLIENT_SECRET }}
+        run: |
+          [[ "$OFFICE_CLIENT_SECRET" =~ ^vab_[A-Za-z0-9_-]{43}$ ]] ||
+            { echo "::error::OFFICE_CLIENT_SECRET must be the issued publisher client secret value"; exit 1; }
+          node scripts/render-sprint.mjs --validate
       - name: Verify CODE manifest digest with registry
         run: node scripts/verify-code-lock.mjs
       - name: Azure login (repository OIDC)
@@ -56,11 +59,18 @@ jobs:
           set -euo pipefail
           az aks get-credentials --resource-group "$AKS_RESOURCE_GROUP" --name "$AKS_CLUSTER_NAME" --overwrite-existing
           kubectl get namespace verentis-apps -o name
-          kubectl get pvc "$OFFICE_STATE_PVC" -n verentis-apps -o json |
+          kubectl get pvc office-state -n verentis-apps -o json |
             node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.status.phase!=="Bound"||!p.spec.accessModes.some(m=>["ReadWriteOnce","ReadWriteOncePod"].includes(m)))throw Error("Office state PVC must be Bound and single-node/single-pod writable")})'
-          kubectl describe secret "$OFFICE_BACKEND_SECRET" -n verentis-apps |
-            grep -Eq '^ClientSecret:[[:space:]]*[1-9][0-9]* bytes$' ||
-            { echo "::error::Office backend Secret needs a nonempty ClientSecret key"; exit 1; }
+      - name: Provision Office backend credential
+        env:
+          OFFICE_CLIENT_SECRET: ${{ secrets.OFFICE_CLIENT_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$OFFICE_CLIENT_SECRET" |
+            kubectl create secret generic office-backend-auth -n verentis-apps \
+              --from-file=ClientSecret=/dev/stdin --dry-run=client -o yaml |
+            kubectl apply -f -
       - uses: docker/setup-buildx-action@v3
       - name: Log in to sprint ACR
         run: az acr login --name "$ACR_NAME"
@@ -91,9 +101,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          kubectl get pvc "$OFFICE_STATE_PVC" -n verentis-apps -o json |
+          kubectl get pvc office-state -n verentis-apps -o json |
             node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.status.phase!=="Bound"||!p.spec.accessModes.some(m=>["ReadWriteOnce","ReadWriteOncePod"].includes(m)))throw Error("Office state PVC is not Bound for a single writer")})'
-          kubectl describe secret "$OFFICE_BACKEND_SECRET" -n verentis-apps |
+          kubectl describe secret office-backend-auth -n verentis-apps |
             grep -Eq '^ClientSecret:[[:space:]]*[1-9][0-9]* bytes$' ||
             { echo "::error::Office backend Secret needs a nonempty ClientSecret key"; exit 1; }
           node scripts/render-sprint.mjs | kubectl apply -f -

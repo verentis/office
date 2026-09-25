@@ -269,6 +269,16 @@ installed package; this applies equally to the publisher's own workspace.
 Only then may an entitled user launch a permitted file. The customer never
 enters the Office secret.
 
+For **local Aspire**, the exact AppHost user-secret keys, hidden-prompt commands,
+reload boundary and signed-package prerequisites are in
+[Publisher-hosted Office in local Aspire](live-local-setup.md#publisher-hosted-office-in-local-aspire-new-installations).
+Do not confuse those local user-secrets with the GitHub `sprint` environment:
+`OFFICE_CLIENT_SECRET` below is the **Office client secret value**, stored as
+an encrypted GitHub environment secret. The deployment creates/updates the
+fixed Kubernetes Secret `office-backend-auth` without printing the credential.
+Office's `npm run check` artifacts are unsigned and cannot satisfy hosted
+Marketplace admission.
+
 | Environment secret | Required value |
 | --- | --- |
 | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | Sprint OIDC identity and tenant/subscription GUIDs, available from Platform's `sprint` environment variables. This identity **must** separately trust `repo:verentis/office:environment:sprint` (not just the Platform repository); otherwise Azure login fails. Limit its permissions to sprint ACR push and AKS deployment. |
@@ -276,14 +286,22 @@ enters the Office secret.
 | `AKS_CLUSTER_NAME`, `AKS_RESOURCE_GROUP` | Sprint dev AKS cluster and resource group, available from Platform's `sprint` environment variables. |
 | `OFFICE_PLATFORM_ORIGIN` | The target sprint API, e.g. `https://api.sprint-9.verentis.dev` (no trailing slash). |
 | `OFFICE_CLIENT_ID` | Nonzero GUID of the publisher-owned Office service for this environment, referenced by the signed package and approved per workspace; never reuse the local/test client. |
-| `OFFICE_BACKEND_SECRET` | **Name**, not value, of a pre-provisioned Kubernetes Secret in `verentis-apps` with nonempty key `ClientSecret` (independent backend credential). The credential itself remains only in Kubernetes. |
-| `OFFICE_STATE_PVC` | Name of a pre-provisioned, Bound, durable RWO/RWOP PVC in `verentis-apps`, with sufficient capacity for SQLite/WAL and the DataProtection `keys/` directory. Retain/back up the claim independently of deployments. |
+| `OFFICE_CLIENT_SECRET` | **Value** of the publisher-owned Office client secret, stored in the GitHub `sprint` environment as an encrypted secret. The workflow provisions `verentis-apps/office-backend-auth` with key `ClientSecret` after Azure login; do not enter a Kubernetes resource name here. |
 
-The workflow checks all settings, lock syntax and the pre-provisioned namespace,
-secret and PVC before building, and checks the objects again before apply. It
-checks that `ClientSecret` is nonempty without printing its value; missing inputs fail rather
-than deploying an unconfigured backend. Secret values are read only by the pod
-from Kubernetes; never put them in workflow files or manifests.
+Provision a durable RWO/RWOP PVC named `office-state` in `verentis-apps` once
+in the verified sprint AKS cluster, using the cluster's approved storage class
+and capacity for SQLite/WAL and the DataProtection `keys/` directory. The
+claim name is fixed in the Office manifest; it is not a GitHub setting. Retain
+and back up the claim independently of deployments.
+
+The workflow checks all settings, lock syntax, namespace and pre-provisioned
+Bound PVC before building. It securely supplies the GitHub credential to
+Kubernetes through stdin, then checks the PVC and nonempty Kubernetes
+`ClientSecret` key again before apply. Missing inputs fail rather than
+deploying an unconfigured backend. The GitHub credential is available only
+to the validation and provisioning steps, not to build actions or rendered
+manifests; the pod reads it from Kubernetes. Never put it in workflow files,
+manifests or command-line arguments.
 The backend uses one replica, `Recreate` upgrade strategy, a claim mounted at
 `/data`, and an init container that grants the .NET non-root user (UID 1654)
 ownership of the claim directory. The backend's startup lock also rejects a

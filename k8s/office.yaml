@@ -73,7 +73,7 @@ spec:
             - {name: Office__DelegationAuthMode, value: "oauth"}
             - name: Office__ClientSecret
               valueFrom:
-                secretKeyRef: {name: __BACKEND_SECRET__, key: ClientSecret, optional: false}
+                secretKeyRef: {name: office-backend-auth, key: ClientSecret, optional: false}
             - {name: Office__PlatformOrigin, value: __PLATFORM_ORIGIN__}
             - {name: EditorOrigin, value: "https://office.apps.verentis.dev"}
             - {name: CodeOrigin, value: "https://office-code.apps.verentis.dev"}
@@ -88,7 +88,7 @@ spec:
             limits: {cpu: 1000m, memory: 1Gi}
       volumes:
         - name: state
-          persistentVolumeClaim: {claimName: __STATE_PVC__}
+          persistentVolumeClaim: {claimName: office-state}
 ---
 apiVersion: v1
 kind: Service

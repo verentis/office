@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { parse, parseAllDocuments } from 'yaml';
@@ -11,8 +12,7 @@ const env = {
     AKS_CLUSTER_NAME: 'aks-verentis-dev-southafricanorth',
     AKS_RESOURCE_GROUP: 'rg-verentis-platform-dev-southafricanorth',
     OFFICE_PLATFORM_ORIGIN: 'https://api.sprint-9.verentis.dev',
-    OFFICE_CLIENT_ID: id, OFFICE_BACKEND_SECRET: 'office-backend-auth',
-    OFFICE_STATE_PVC: 'office-state',
+    OFFICE_CLIENT_ID: id,
     EDITOR_IMAGE: `acrverentis.azurecr.io/verentis/office-editor@sha256:${'a'.repeat(64)}`,
     BACKEND_IMAGE: `acrverentis.azurecr.io/verentis/office-backend@sha256:${'b'.repeat(64)}`
 };
@@ -24,7 +24,7 @@ const resource = (kind, name) => objects.find(item => item.kind === kind && item
 const container = name => resource('Deployment', name).spec.template.spec.containers[0];
 const variable = (name, key) => container(name).env.find(entry => entry.name === key);
 
-test('push targets sprint only and blocks missing cluster, PVC and backend secret before build/apply', () => {
+test('push targets sprint only and provisions the credential after checking the durable state', () => {
     assert.deepEqual(workflow.on.push.branches, ['feat/**']);
     assert.equal(workflow.on.workflow_dispatch, undefined);
     assert.equal(workflow.on.pull_request, undefined);
@@ -40,13 +40,27 @@ test('push targets sprint only and blocks missing cluster, PVC and backend secre
     assert.ok(index('Verify CODE') > index('Validate required'));
     assert.ok(index('Verify CODE') < index('Build and push'));
     assert.ok(index('Check cluster prerequisites') < index('Build and push'));
+    assert.ok(index('Provision Office backend credential') > index('Check cluster prerequisites'));
+    assert.ok(index('Provision Office backend credential') < index('Build and push'));
     assert.ok(index('Recheck prerequisites') > index('Build and push backend'));
     const check = steps[index('Check cluster prerequisites')].run;
     assert.match(check, /status\.phase!=="Bound"/);
     assert.match(check, /kubectl get namespace verentis-apps/);
-    assert.match(check, /kubectl describe secret "\$OFFICE_BACKEND_SECRET"/);
-    assert.match(check, /grep -Eq '\^ClientSecret:/);
+    assert.match(check, /kubectl get pvc office-state/);
     assert.doesNotMatch(check, /kubectl (create|apply).*namespace|kubectl get secret.*-o json/);
+    const provision = steps[index('Provision Office backend credential')];
+    assert.equal(provision.env.OFFICE_CLIENT_SECRET, '${{ secrets.OFFICE_CLIENT_SECRET }}');
+    assert.match(provision.run, /printf '%s' "\$OFFICE_CLIENT_SECRET" \|/);
+    assert.match(provision.run, /--from-file=ClientSecret=\/dev\/stdin --dry-run=client -o yaml \|/);
+    assert.match(provision.run, /kubectl apply -f -/);
+    assert.doesNotMatch(provision.run, /--from-literal|echo "\$OFFICE_CLIENT_SECRET"|set -x/);
+    assert.equal(steps[index('Validate required')].env.OFFICE_CLIENT_SECRET, '${{ secrets.OFFICE_CLIENT_SECRET }}');
+    assert.match(steps[index('Validate required')].run, /\[\[ "\$OFFICE_CLIENT_SECRET" =~ \^vab_\[A-Za-z0-9_-\]\{43\}\$ \]\]/);
+    assert.equal(workflow.jobs.deploy.env.OFFICE_CLIENT_SECRET, undefined);
+    assert.doesNotMatch(JSON.stringify(workflow), /OFFICE_BACKEND_SECRET/);
+    assert.equal(workflow.jobs.deploy.env.OFFICE_STATE_PVC, undefined);
+    assert.match(steps[index('Recheck prerequisites')].run, /kubectl describe secret office-backend-auth/);
+    assert.match(steps[index('Recheck prerequisites')].run, /grep -Eq '\^ClientSecret:/);
     assert.match(steps[index('Recheck prerequisites')].run, /kubectl rollout status/);
     assert.match(steps[index('Recheck prerequisites')].run, /certificate\/"\$name"-tls/);
     assert.match(steps[index('Recheck prerequisites')].run, /h\.draining!==false/);
@@ -54,7 +68,7 @@ test('push targets sprint only and blocks missing cluster, PVC and backend secre
     for (const name of [
         'AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID',
         'ACR_NAME', 'ACR_LOGIN_SERVER', 'AKS_CLUSTER_NAME', 'AKS_RESOURCE_GROUP',
-        'OFFICE_PLATFORM_ORIGIN', 'OFFICE_CLIENT_ID', 'OFFICE_BACKEND_SECRET', 'OFFICE_STATE_PVC'
+        'OFFICE_PLATFORM_ORIGIN', 'OFFICE_CLIENT_ID'
     ]) {
         assert.equal(workflow.jobs.deploy.env[name], '${{ secrets.' + name + ' }}');
     }
@@ -97,11 +111,11 @@ test('three HTTPS origins, strict callbacks, pinned CODE and single persistent w
     assert.equal(variable('office-wopi', 'Office__PlatformOrigin').value, env.OFFICE_PLATFORM_ORIGIN);
     assert.equal(variable('office-wopi', 'Office__DelegationAuthMode').value, 'oauth');
     assert.deepEqual(variable('office-wopi', 'Office__ClientSecret').valueFrom.secretKeyRef,
-        { name: env.OFFICE_BACKEND_SECRET, key: 'ClientSecret', optional: false });
+        { name: 'office-backend-auth', key: 'ClientSecret', optional: false });
     const backend = resource('Deployment', 'office-wopi').spec;
     assert.equal(backend.replicas, 1);
     assert.equal(backend.strategy.type, 'Recreate');
-    assert.equal(backend.template.spec.volumes[0].persistentVolumeClaim.claimName, env.OFFICE_STATE_PVC);
+    assert.equal(backend.template.spec.volumes[0].persistentVolumeClaim.claimName, 'office-state');
     assert.equal(variable('office-wopi', 'DataDirectory').value, '/data');
     assert.equal(container('office-wopi').volumeMounts[0].mountPath, '/data');
     assert.equal(backend.template.spec.initContainers[0].volumeMounts[0].mountPath, '/data');
@@ -129,4 +143,18 @@ test('missing settings, wrong environment, mutable images and bad CODE pin fail 
         assert.throws(() => renderSprint({ ...env, EDITOR_IMAGE: image }), /EDITOR_IMAGE/);
     assert.throws(() => renderSprint(env, { ...lock, digest: 'sha256:bad' }), /CODE image/);
     assert.throws(() => renderSprint(env, { ...lock, repository: 'evil.invalid/code' }), /CODE image/);
+});
+
+test('deployment rejects a Kubernetes Secret name in place of the issued credential', () => {
+    const command = workflow.jobs.deploy.steps.find(step => step.name === 'Validate required sprint settings and CODE pin').run;
+    const options = { cwd: new URL('../../', import.meta.url), env: { ...process.env, ...env } };
+    assert.throws(
+        () => execFileSync('bash', ['-c', command], {
+            ...options, env: { ...options.env, OFFICE_CLIENT_SECRET: 'office-backend-auth' }
+        }),
+        error => error.status === 1 && error.stdout.toString().includes('OFFICE_CLIENT_SECRET must be the issued publisher client secret value')
+    );
+    assert.match(execFileSync('bash', ['-c', command], {
+        ...options, env: { ...options.env, OFFICE_CLIENT_SECRET: `vab_${'A'.repeat(43)}` }
+    }).toString(), /Sprint deployment inputs and CODE lock validated/);
 });

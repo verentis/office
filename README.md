@@ -26,15 +26,22 @@ and digest-pinned CODE automatically:
 dotnet run --project "src/0 - Aspire/Verentis.AppHost"
 ```
 
-Open a supported file in its authenticated workspace after installation,
-consent and backend pairing. The wrapper runs at **https://office.localtest.me**;
+For a new hosted installation, register the `local` publisher service for
+`https://office.localtest.me`, save its client ID and one-time secret in
+**AppHost user-secrets**, then reload AppHost. A signed Office package bound to
+that exact service and explicit workspace-admin consent are also required;
+publisher-owned workspaces are not exempt. Follow the
+[copy-paste local onboarding and secret setup](docs/live-local-setup.md#publisher-hosted-office-in-local-aspire-new-installations)
+before opening a supported file. The `npm run check` packages are **unsigned**
+and are not hosted-installation artifacts. The wrapper runs at **https://office.localtest.me**;
 editor and callbacks use
 `https://office-code.localtest.me` and `https://office-wopi.localtest.me`.
 All three use the shared wildcard certificate; CODE verifies callback TLS.
 Missing checkout, image lock or certificate files fail startup with setup guidance.
 Publish and `ASPIRE_TEST_MODE` exclude Office resources. See the
-[setup guide](docs/live-local-setup.md) for the local preview manifest and
-independent backend credential.
+[setup guide](docs/live-local-setup.md) for the signed-package and credential
+requirements. The older account-owned setup helper documents a different,
+explicit legacy mode; do not use it for a new hosted installation.
 
 To validate Office without starting unrelated platform services, use
 `dotnet run --project utilities/local-office` from platform instead. Do not run
