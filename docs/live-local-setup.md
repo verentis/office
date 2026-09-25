@@ -58,7 +58,15 @@ a sibling checkout or registry publication. Refreshing the artifact requires an
 explicit SDK checkout with its npm dependencies installed; ordinary `npm ci`
 does not. The package retains its MIT license. No package is published.
 
-## Real installation and confidential-backend setup
+## Earlier local same-account preview
+
+The setup helper below exercises the earlier, explicit `legacy` mode; it is
+not a hosted publisher installation or a production onboarding guide. New
+Office installs require a developer-signed Marketplace version bound to a
+publisher-owned service credential and explicit workspace-admin approval,
+including in the publisher's own workspace. Office now defaults to `oauth`;
+leave Platform hosted admission off until the complete local signed-install,
+consent, launch/save/reopen and revocation flow has been verified.
 
 1. Create a separate test workspace and upload an original XLSX using the normal
    CLI files API. Never edit a customer's workbook for acceptance.
@@ -93,6 +101,10 @@ provisioning. If the old host does not expose those routes, coordinate its model
 reload first; an unconfigured live backend deliberately returns 503. After the
 helper stores the independent backend credentials, reload the Office runtime
 configuration as described below. No temporary test credential is needed.
+The helper requires an explicit `Office:DelegationAuthMode=legacy` override for
+this earlier local preview. Do not use it to provision a hosted publisher
+client. The default `oauth` mode requires the approved signed-package and
+hosted-client contracts; see [backend authentication rollout](operations.md#sprint-aks-deployment).
 
 ```sh
 python3 scripts/setup-local-backend.py \

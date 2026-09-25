@@ -95,6 +95,7 @@ test('three HTTPS origins, strict callbacks, pinned CODE and single persistent w
     assert.equal(variable('office-editor', 'NUXT_PUBLIC_PARENT_ORIGINS'), undefined);
     assert.equal(workflow.jobs.deploy.env.OFFICE_PARENT_ORIGINS, undefined);
     assert.equal(variable('office-wopi', 'Office__PlatformOrigin').value, env.OFFICE_PLATFORM_ORIGIN);
+    assert.equal(variable('office-wopi', 'Office__DelegationAuthMode').value, 'oauth');
     assert.deepEqual(variable('office-wopi', 'Office__ClientSecret').valueFrom.secretKeyRef,
         { name: env.OFFICE_BACKEND_SECRET, key: 'ClientSecret', optional: false });
     const backend = resource('Deployment', 'office-wopi').spec;

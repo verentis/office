@@ -225,13 +225,57 @@ fails closed without that contract; pushing its `main` branch before Platform
 is upgraded makes new live launches unavailable. Verify the gateway and
 container before the Office push.
 
+**Backend authentication rollout dependency:** `Office:DelegationAuthMode`
+defaults to `oauth`, as does the sprint backend manifest. Greenfield Office
+installations use publisher-owned service credentials and the exact signed
+installation/consent path, whether the workspace belongs to the publisher or
+another account. Platform `HostedServices:Enabled` must remain off until
+binding proof, Resource consent and live user/file checks pass. An
+unconfigured Office backend fails closed; the runtime never selects the
+legacy JSON-secret path as an automatic fallback. Any other nonempty mode
+value is a startup error.
+
+In `oauth` mode Office sends configured `Office:ClientId` and
+`Office:ClientSecret` only to Platform HTTPS `POST /connect/token` as HTTP
+Basic credentials, with form fields `grant_type=client_credentials` and
+`scope=app-delegation`. It caches the short-lived `access_token` in memory
+until shortly before `expires_in`, then sends it as `Authorization: Bearer` on
+`/v1/hosted/app-embeds/exchange` and
+`/v1/hosted/app-delegations/{exchange,renew,revoke}`. Those JSON bodies contain
+`clientId`, not `clientSecret`. Token or hosted-endpoint failure denies the
+operation; it must **never** retry a legacy path or fall back to JSON-secret
+authentication. The delegated
+`vda1.` file access token remains separate and is used only for Node file
+requests. Do not log Basic/Bearer headers, token responses, request bodies or
+WOPI URLs at any gateway, proxy or telemetry layer.
+
+Platform Security provides registered publisher-client credentials at
+`/connect/token` and the hosted bearer endpoints. Enabling hosted admission
+still requires live signed Marketplace binding verification, explicit
+workspace-admin consent, Resource installation/node provenance and current
+user/file authorization. Confirm the gateway forwards `Authorization` to
+`/connect/token` and `/v1/hosted/...`; verify launch, save/reopen, renew,
+revoke and denied-session behavior in local Aspire before enabling an Office
+deployment.
+
+For a new installation, the publisher administrator registers the Office
+service for the target environment on the Platform publisher page and stores
+its one-time client secret only in the Office backend's secret store. The
+developer signs and publishes an Office package whose `hosted-backend`
+declaration names that service's client ID, environment and exact HTTPS
+endpoint. A workspace administrator then reviews the server-verified
+publisher/operator, exact version and permission ceiling and approves the
+installed package; this applies equally to the publisher's own workspace.
+Only then may an entitled user launch a permitted file. The customer never
+enters the Office secret.
+
 | Environment secret | Required value |
 | --- | --- |
 | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | Sprint OIDC identity and tenant/subscription GUIDs, available from Platform's `sprint` environment variables. This identity **must** separately trust `repo:verentis/office:environment:sprint` (not just the Platform repository); otherwise Azure login fails. Limit its permissions to sprint ACR push and AKS deployment. |
 | `ACR_NAME`, `ACR_LOGIN_SERVER` | Sprint ACR name and matching `<name>.azurecr.io` host, available from Platform's repository variables; AKS must be able to pull from it. |
 | `AKS_CLUSTER_NAME`, `AKS_RESOURCE_GROUP` | Sprint dev AKS cluster and resource group, available from Platform's `sprint` environment variables. |
 | `OFFICE_PLATFORM_ORIGIN` | The target sprint API, e.g. `https://api.sprint-9.verentis.dev` (no trailing slash). |
-| `OFFICE_CLIENT_ID` | Nonzero GUID of a separately registered Office backend client, paired with its installation by the platform owner; never reuse the local/test client. |
+| `OFFICE_CLIENT_ID` | Nonzero GUID of the publisher-owned Office service for this environment, referenced by the signed package and approved per workspace; never reuse the local/test client. |
 | `OFFICE_BACKEND_SECRET` | **Name**, not value, of a pre-provisioned Kubernetes Secret in `verentis-apps` with nonempty key `ClientSecret` (independent backend credential). The credential itself remains only in Kubernetes. |
 | `OFFICE_STATE_PVC` | Name of a pre-provisioned, Bound, durable RWO/RWOP PVC in `verentis-apps`, with sufficient capacity for SQLite/WAL and the DataProtection `keys/` directory. Retain/back up the claim independently of deployments. |
 

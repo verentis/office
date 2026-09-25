@@ -70,6 +70,7 @@ spec:
           env:
             - {name: DataDirectory, value: /data}
             - {name: Office__ClientId, value: __CLIENT_ID__}
+            - {name: Office__DelegationAuthMode, value: "oauth"}
             - name: Office__ClientSecret
               valueFrom:
                 secretKeyRef: {name: __BACKEND_SECRET__, key: ClientSecret, optional: false}
