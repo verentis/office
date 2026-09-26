@@ -1,7 +1,7 @@
 # Live local Office integration
 
 This is a **local development preview**, not a production-readiness or
-per-format fidelity claim. Office 0.1.2's local overlay registers the formats
+per-format fidelity claim. Office's local overlay registers the formats
 below. Production manifests retain disabled claims. The older
 `tests/fixtures/office-live.app.yaml` remains an XLSX-only acceptance fixture;
 it is not the complete package manifest.
@@ -58,7 +58,122 @@ a sibling checkout or registry publication. Refreshing the artifact requires an
 explicit SDK checkout with its npm dependencies installed; ordinary `npm ci`
 does not. The package retains its MIT license. No package is published.
 
-## Real installation and confidential-backend setup
+## Publisher-hosted Office in local Aspire (new installations)
+
+Run `platform` and `office` as sibling checkouts, with the normal platform
+Aspire AppHost, trusted local certificates and an authenticated publisher
+administrator. The administrator must own the Marketplace publisher and have
+the account-level `security.appbackendclient.create` grant. Use a dedicated
+test workspace and document; this is the same flow whether that workspace
+belongs to the publisher or to another customer.
+
+1. On the **account publisher page**, register a hosted service with
+   environment `local` and endpoint **`https://office.localtest.me`** (an exact
+   HTTPS origin, with no path). Copy its client ID and **one-time** client
+   secret before closing the dialog. A service-account API key, the package
+   signing key and the older `/v1/app-backend-clients` credential are not
+   substitutes. Do not run `scripts/setup-local-backend.py` for this flow:
+   that helper registers the older account-owned client.
+2. From the `verentis` directory, store the new credentials in **AppHost
+   user-secrets**. Replace any previously saved `Office:ClientId` and backend
+   secret from an older preview. Only the client ID appears in the command
+   arguments; the hidden prompt sends the secret to `dotnet` as JSON on stdin.
+
+   ```sh
+   dotnet user-secrets set --project 'platform/src/0 - Aspire/Verentis.AppHost/Verentis.AppHost.csproj' \
+     'Office:ClientId' '<issued-local-client-guid>'
+   python3 -c 'import getpass,json; print(json.dumps({"Parameters:office-backend-client-secret":getpass.getpass("Office client secret: ")}))' |
+     dotnet user-secrets set --project 'platform/src/0 - Aspire/Verentis.AppHost/Verentis.AppHost.csproj'
+   ```
+
+   AppHost maps these to `Office__ClientId` and `Office__ClientSecret` on
+   `office-wopi`, and supplies `Office__PlatformOrigin` from the local API
+   gateway. The backend defaults to `oauth`; do **not** add a legacy-mode
+   override. Do not put this **local** secret in `.env`, the manifest, GitHub,
+   a shell argument, a screenshot or logs. Sprint uses a separate credential
+   in the GitHub `sprint` environment's `OFFICE_CLIENT_SECRET` secret.
+   `dotnet user-secrets list` prints secret values, so do not paste its output
+   into a ticket.
+3. **Reload AppHost's resource model** after changing the user-secrets;
+   restarting just `office-wopi` does not reread AppHost's parameter or new
+   gateway routes. Preserve the existing Cosmos containers and Office live
+   data directory; do not tear down the entire shared stack just to refresh
+   credentials. Check the public local health endpoint without exposing the
+   secret:
+
+   ```sh
+   curl --fail --cacert platform/scripts/.certs/rootCA.pem \
+     https://office-wopi.localtest.me/health
+   ```
+
+   A response with `backendConfigured: true` proves configuration is present,
+   **not** that the client is authorized to read files.
+4. Prepare a **new, developer-signed** Marketplace Office version bound to
+   this exact client, environment and endpoint. The local overlay's file
+   formats and permissions do not by themselves request hosted access.
+   A hosted overlay must contain:
+
+   ```yaml
+   spec:
+     capabilities: [hosted-backend]
+     hosted-backend:
+       client-id: <issued-local-client-guid>
+       environment: local
+       endpoint: https://office.localtest.me
+   ```
+
+   Use the publisher's Ed25519 signing key whose **public** half is registered
+   with the same publisher in the **local** Platform. The CLI targets
+   production by default: authenticate and publish against
+   `https://api.localtest.me:6500`, not the production registry. Pack from the
+   Office checkout:
+
+   ```sh
+   verentis pack manifests --env local \
+     --overlay /absolute/path/to/hosted-local.yaml \
+     --key YOUR_REGISTERED_KEY_NAME --set-version NEW_UNPUBLISHED_VERSION
+   ```
+
+   Verify the resulting package and publish that **exact** signed version.
+   The packages produced by `npm run check`
+   use `--no-sign`: they are useful for validation but **cannot** obtain
+   hosted-backend authority. Never insert a client secret into a package.
+5. Install that version in the test workspace. A workspace administrator
+   reviews the verified service operator, version, endpoint and requested
+   permissions, then approves Resource's exact installation candidate.
+   Installing in your **own publisher workspace still requires approval**;
+   being the publisher does not grant access to every document. Only a user
+   with current rights to the chosen file may launch it.
+
+`HostedServices:Enabled` in **Security** defaults to `false`; setting the
+Office credentials does not turn it on. Keep it off until the signed package,
+live installation proof and admin consent have been checked in an isolated
+local acceptance environment. Enabling it is a separate, deliberate Security
+process configuration change, not another Office credential. Verify launch,
+save/reopen and revocation before enabling it in sprint or production. Missing
+proof, consent, credentials or authorization must deny launch without creating
+an Office/WOPI session.
+
+If Office still reports `office_backend_setup_required`, check the AppHost
+user-secret **keys** and reload boundary without printing their values. If the
+backend is configured but `/connect/token` or hosted exchange denies access,
+check the client/environment binding and Security gate; do not fall back to an
+API key or the legacy exchange. A copied manifest or unsigned local package
+cannot satisfy Marketplace's signed-binding proof.
+
+## Earlier local same-account preview
+
+The setup helper below is retained for historical, account-owned `legacy`
+previews; **do not run it for a new installation**. AppHost forwards the ID
+and secret but does not forward a legacy-mode override, so those two settings
+alone cannot make this helper's credential work with today's default OAuth
+backend. This is not a hosted publisher installation or a production
+onboarding guide. New
+Office installs require a developer-signed Marketplace version bound to a
+publisher-owned service credential and explicit workspace-admin approval,
+including in the publisher's own workspace. Office now defaults to `oauth`;
+leave Platform hosted admission off until the complete local signed-install,
+consent, launch/save/reopen and revocation flow has been verified.
 
 1. Create a separate test workspace and upload an original XLSX using the normal
    CLI files API. Never edit a customer's workbook for acceptance.
@@ -93,6 +208,10 @@ provisioning. If the old host does not expose those routes, coordinate its model
 reload first; an unconfigured live backend deliberately returns 503. After the
 helper stores the independent backend credentials, reload the Office runtime
 configuration as described below. No temporary test credential is needed.
+The helper requires an explicit `Office:DelegationAuthMode=legacy` override for
+this earlier local preview. Do not use it to provision a hosted publisher
+client. The default `oauth` mode requires the approved signed-package and
+hosted-client contracts; see [backend authentication rollout](operations.md#sprint-aks-deployment).
 
 ```sh
 python3 scripts/setup-local-backend.py \
@@ -121,10 +240,11 @@ credential usable on create/path/list/upload APIs.
 
 ## Runtime configuration and browser login
 
-The setup writes only these AppHost user-secrets:
+The older setup helper also writes these AppHost user-secrets; for the
+publisher-hosted flow use the registration and secure prompt above instead:
 
 - `Office:ClientId`
-- `Parameters:office-backend-client-secret` (independent app credential)
+- `Parameters:office-backend-client-secret` (the corresponding one-time credential)
 
 There is no Office parent-host allowlist. Platform resolves the actual page
 origin against the active workspace-domain registry before issuing a one-use

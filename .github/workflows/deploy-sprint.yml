@@ -1,7 +1,7 @@
 name: Deploy Office to sprint AKS
 on:
   push:
-    branches: [main]
+    branches: ['feat/**']
 permissions:
   id-token: write
   contents: read
@@ -10,20 +10,20 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
+    if: github.repository == 'verentis/office'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    environment: sprint
     env:
-      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      ACR_NAME: ${{ vars.ACR_NAME }}
-      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
-      AKS_CLUSTER_NAME: ${{ vars.AKS_CLUSTER_NAME }}
-      AKS_RESOURCE_GROUP: ${{ vars.AKS_RESOURCE_GROUP }}
-      OFFICE_PLATFORM_ORIGIN: ${{ vars.OFFICE_PLATFORM_ORIGIN }}
-      OFFICE_CLIENT_ID: ${{ vars.OFFICE_CLIENT_ID }}
-      OFFICE_BACKEND_SECRET: ${{ vars.OFFICE_BACKEND_SECRET }}
-      OFFICE_STATE_PVC: ${{ vars.OFFICE_STATE_PVC }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+      AKS_CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
+      AKS_RESOURCE_GROUP: ${{ secrets.AKS_RESOURCE_GROUP }}
+      OFFICE_PLATFORM_ORIGIN: ${{ secrets.OFFICE_PLATFORM_ORIGIN }}
+      OFFICE_CLIENT_ID: ${{ secrets.OFFICE_CLIENT_ID }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -39,26 +39,43 @@ jobs:
       - name: Check Office package and backend
         run: npm run check && npm run check:framing && dotnet test tests/protocol/Office.Protocol.Tests.csproj --verbosity quiet
       - name: Validate required sprint settings and CODE pin
-        run: node scripts/render-sprint.mjs --validate
+        env:
+          OFFICE_CLIENT_SECRET: ${{ secrets.OFFICE_CLIENT_SECRET }}
+        run: |
+          [[ "$OFFICE_CLIENT_SECRET" =~ ^vab_[A-Za-z0-9_-]{43}$ ]] ||
+            { echo "::error::OFFICE_CLIENT_SECRET must be the issued publisher client secret value"; exit 1; }
+          node scripts/render-sprint.mjs --validate
       - name: Verify CODE manifest digest with registry
         run: node scripts/verify-code-lock.mjs
       - name: Azure login (repository OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Check cluster prerequisites
         shell: bash
         run: |
           set -euo pipefail
           az aks get-credentials --resource-group "$AKS_RESOURCE_GROUP" --name "$AKS_CLUSTER_NAME" --overwrite-existing
           kubectl get namespace verentis-apps -o name
-          kubectl get pvc "$OFFICE_STATE_PVC" -n verentis-apps -o json |
-            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.status.phase!=="Bound"||!p.spec.accessModes.some(m=>["ReadWriteOnce","ReadWriteOncePod"].includes(m)))throw Error("Office state PVC must be Bound and single-node/single-pod writable")})'
-          kubectl describe secret "$OFFICE_BACKEND_SECRET" -n verentis-apps |
-            grep -Eq '^ClientSecret:[[:space:]]*[1-9][0-9]* bytes$' ||
-            { echo "::error::Office backend Secret needs a nonempty ClientSecret key"; exit 1; }
+          storage_class="$(kubectl get storageclass default -o json)"
+          printf '%s' "$storage_class" |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const c=JSON.parse(s);if(c.provisioner!=="disk.csi.azure.com"||!["WaitForFirstConsumer","Immediate"].includes(c.volumeBindingMode))throw Error("Office needs the expected Azure Disk default storage class")})'
+          kubectl apply -f k8s/state-pvc.yaml
+          state_pvc="$(kubectl get pvc office-state -n verentis-apps -o json)"
+          printf '%s' "$state_pvc" |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.spec.storageClassName!=="default"||p.spec.resources.requests.storage!=="10Gi"||p.spec.accessModes.length!==1||p.spec.accessModes[0]!=="ReadWriteOnce"||!["Pending","Bound"].includes(p.status.phase))throw Error("Office state PVC must use the expected single-writer Azure Disk claim")})'
+      - name: Provision Office backend credential
+        env:
+          OFFICE_CLIENT_SECRET: ${{ secrets.OFFICE_CLIENT_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$OFFICE_CLIENT_SECRET" |
+            kubectl create secret generic office-backend-auth -n verentis-apps \
+              --from-file=ClientSecret=/dev/stdin --dry-run=client -o yaml |
+            kubectl apply -f -
       - uses: docker/setup-buildx-action@v3
       - name: Log in to sprint ACR
         run: az acr login --name "$ACR_NAME"
@@ -89,12 +106,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          kubectl get pvc "$OFFICE_STATE_PVC" -n verentis-apps -o json |
-            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.status.phase!=="Bound"||!p.spec.accessModes.some(m=>["ReadWriteOnce","ReadWriteOncePod"].includes(m)))throw Error("Office state PVC is not Bound for a single writer")})'
-          kubectl describe secret "$OFFICE_BACKEND_SECRET" -n verentis-apps |
+          state_pvc="$(kubectl get pvc office-state -n verentis-apps -o json)"
+          printf '%s' "$state_pvc" |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.spec.storageClassName!=="default"||p.spec.resources.requests.storage!=="10Gi"||p.spec.accessModes.length!==1||p.spec.accessModes[0]!=="ReadWriteOnce"||!["Pending","Bound"].includes(p.status.phase))throw Error("Office state PVC no longer matches the approved single-writer claim")})'
+          kubectl describe secret office-backend-auth -n verentis-apps |
             grep -Eq '^ClientSecret:[[:space:]]*[1-9][0-9]* bytes$' ||
             { echo "::error::Office backend Secret needs a nonempty ClientSecret key"; exit 1; }
           node scripts/render-sprint.mjs | kubectl apply -f -
+          kubectl wait -n verentis-apps --for=jsonpath='{.status.phase}'=Bound pvc/office-state --timeout=10m
           for name in office-wopi office-code office-editor; do
             kubectl rollout status deployment/"$name" -n verentis-apps --timeout=10m
           done

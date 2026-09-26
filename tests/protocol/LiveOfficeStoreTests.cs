@@ -57,6 +57,26 @@ public sealed class LiveOfficeStoreTests
     }
 
     [Theory]
+    [InlineData(true, 503)]
+    [InlineData(false, 404)]
+    public async Task Denied_hosted_authorization_creates_no_wopi_session(bool denyToken, int status)
+    {
+        using var fixture = new Fixture(DelegationAuthMode.OAuth);
+        fixture.Api.DenyToken = denyToken;
+        fixture.Api.DenyHosted = !denyToken;
+        using var store = fixture.Start();
+
+        Assert.Equal(status, (await Assert.ThrowsAsync<PlatformFailure>(() =>
+            store.Create(fixture.Request(), default))).Status);
+        Assert.Equal(0, fixture.Api.FileRequests);
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(fixture.Directory, "office.db")}");
+        connection.Open();
+        using var count = connection.CreateCommand();
+        count.CommandText = "SELECT COUNT(*) FROM sessions";
+        Assert.Equal(0L, count.ExecuteScalar());
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("http://workspace.example.test")]
     [InlineData("https://workspace.example.test/path")]
@@ -97,13 +117,93 @@ public sealed class LiveOfficeStoreTests
     [Fact]
     public async Task Embed_ticket_exchange_uses_confidential_backend_identity_and_exact_editor_entry()
     {
-        using var fixture = new Fixture();
+        using var fixture = new Fixture(DelegationAuthMode.OAuth);
         var result = await fixture.Platform.ExchangeEmbed("single-use-embed-ticket",
             new Uri("https://office.apps.verentis.dev/"), default);
         Assert.Equal(fixture.Api.BoundOrigin, result.ParentOrigin);
         fixture.Api.EmbedEntryUrl = "https://unrelated.example/";
         Assert.Equal(502, (await Assert.ThrowsAsync<PlatformFailure>(() => fixture.Platform.ExchangeEmbed(
             "single-use-embed-ticket", new Uri("https://office.apps.verentis.dev/"), default))).Status);
+        Assert.Equal(1, fixture.Api.TokenCalls);
+    }
+
+    [Fact]
+    public async Task Concurrent_delegation_calls_share_one_service_token_and_keep_node_credentials_separate()
+    {
+        using var fixture = new Fixture(DelegationAuthMode.OAuth);
+        var requests = Enumerable.Range(0, 20).Select(_ => fixture.Platform.Exchange(
+            fixture.Request(), default));
+        var credentials = await Task.WhenAll(requests);
+        Assert.Equal(1, fixture.Api.TokenCalls);
+        await fixture.Platform.Metadata(credentials[0], default);
+        var renewed = await fixture.Platform.Renew(credentials[0], Guid.NewGuid(), default);
+        await fixture.Platform.Revoke(renewed, default);
+        Assert.Equal(1, fixture.Api.TokenCalls);
+        Assert.Equal(1, fixture.Api.RenewalCalls);
+    }
+
+    [Fact]
+    public async Task Denied_or_expired_service_token_never_sends_a_delegation_request()
+    {
+        using var fixture = new Fixture(DelegationAuthMode.OAuth);
+        fixture.Api.DenyToken = true;
+        Assert.Equal(503, (await Assert.ThrowsAsync<PlatformFailure>(() =>
+            fixture.Platform.Exchange(fixture.Request(), default))).Status);
+        Assert.Equal(0, fixture.Api.DelegationCalls);
+        fixture.Api.DenyToken = false;
+        fixture.Api.TokenLifetime = 1;
+        var credentials = await fixture.Platform.Exchange(fixture.Request(), default);
+        fixture.Api.DenyToken = true;
+        await Task.Delay(950);
+        Assert.Equal(503, (await Assert.ThrowsAsync<PlatformFailure>(() =>
+            fixture.Platform.Renew(credentials, Guid.NewGuid(), default))).Status);
+        Assert.Equal(1, fixture.Api.DelegationCalls);
+        Assert.Equal(3, fixture.Api.TokenCalls);
+        fixture.Api.DenyToken = false;
+        await fixture.Platform.Revoke(credentials, default);
+        Assert.Equal(2, fixture.Api.DelegationCalls);
+        Assert.Equal(4, fixture.Api.TokenCalls);
+    }
+
+    [Fact]
+    public async Task Malformed_service_token_response_denies_embed_exchange()
+    {
+        using var fixture = new Fixture(DelegationAuthMode.OAuth);
+        fixture.Api.TokenLifetime = 0;
+        Assert.Equal(503, (await Assert.ThrowsAsync<PlatformFailure>(() => fixture.Platform.ExchangeEmbed(
+            "single-use-embed-ticket", new Uri("https://office.apps.verentis.dev/"), default))).Status);
+        Assert.Equal(0, fixture.Api.EmbedCalls);
+    }
+
+    [Fact]
+    public async Task Explicit_legacy_mode_uses_secret_in_platform_bodies_without_calling_token_endpoint()
+    {
+        using var fixture = new Fixture(DelegationAuthMode.Legacy);
+        Assert.Equal(DelegationAuthMode.OAuth, new BackendIdentity(fixture.Api.Client,
+            "private-client-secret", new Uri("https://api.example/")).AuthMode);
+        await fixture.Platform.ExchangeEmbed("single-use-embed-ticket",
+            new Uri("https://office.apps.verentis.dev/"), default);
+        var credentials = await fixture.Platform.Exchange(fixture.Request(), default);
+        await fixture.Platform.Metadata(credentials, default);
+        var renewed = await fixture.Platform.Renew(credentials, Guid.NewGuid(), default);
+        await fixture.Platform.Revoke(renewed, default);
+        Assert.Equal(0, fixture.Api.TokenCalls);
+        Assert.Equal(1, fixture.Api.EmbedCalls);
+        Assert.Equal(3, fixture.Api.DelegationCalls);
+    }
+
+    [Fact]
+    public async Task Hosted_endpoint_rejection_does_not_retry_legacy_paths()
+    {
+        using var fixture = new Fixture(DelegationAuthMode.OAuth);
+        fixture.Api.DenyHosted = true;
+        Assert.Equal(404, (await Assert.ThrowsAsync<PlatformFailure>(() => fixture.Platform.ExchangeEmbed(
+            "single-use-embed-ticket", new Uri("https://office.apps.verentis.dev/"), default))).Status);
+        Assert.Equal(404, (await Assert.ThrowsAsync<PlatformFailure>(() =>
+            fixture.Platform.Exchange(fixture.Request(), default))).Status);
+        Assert.Equal(1, fixture.Api.EmbedCalls);
+        Assert.Equal(1, fixture.Api.DelegationCalls);
+        Assert.Equal(1, fixture.Api.TokenCalls);
     }
 
     [Fact]
@@ -273,8 +373,17 @@ public sealed class LiveOfficeStoreTests
         public string Directory { get; } = Path.Combine(Path.GetTempPath(), $"office-live-tests-{Guid.NewGuid():N}");
         public MockPlatform Api { get; } = new();
         private readonly HttpClient http;
-        public Fixture() { System.IO.Directory.CreateDirectory(Directory); http = new HttpClient(Api); }
-        public PlatformFileClient Platform => new(http, new(Api.Client, "private-client-secret", new Uri("https://api.example/")));
+        private readonly DelegationAuthMode mode;
+        public Fixture(DelegationAuthMode mode = DelegationAuthMode.Legacy)
+        {
+            this.mode = mode;
+            Api.Mode = mode;
+            System.IO.Directory.CreateDirectory(Directory);
+            http = new HttpClient(Api);
+        }
+        private PlatformFileClient? platform;
+        public PlatformFileClient Platform => platform ??= new(http,
+            new(Api.Client, "private-client-secret", new Uri("https://api.example/"), mode));
         public LiveOfficeStore Start() => new(Directory,
             DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(Directory, "keys"))),
             Platform);
@@ -305,6 +414,13 @@ public sealed class LiveOfficeStoreTests
         public int WriteCalls { get; private set; }
         public int FileRequests { get; private set; }
         public int RenewalCalls { get; private set; }
+        public int TokenCalls { get; private set; }
+        public int DelegationCalls { get; private set; }
+        public int EmbedCalls { get; private set; }
+        public bool DenyToken { get; set; }
+        public bool DenyHosted { get; set; }
+        public DelegationAuthMode Mode { get; set; }
+        public int TokenLifetime { get; set; } = 300;
         private readonly Dictionary<string, PlatformFile> writes = [];
         public Dictionary<Guid, DelegatedCredentials> Renewals { get; } = [];
         public string Name { get; set; } = "original.xlsx";
@@ -313,18 +429,42 @@ public sealed class LiveOfficeStoreTests
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            if (Revoked) return new(HttpStatusCode.Unauthorized);
-            if (request.RequestUri!.AbsolutePath == "/v1/app-embeds/exchange")
+            if (request.RequestUri!.AbsolutePath == "/connect/token")
             {
+                Assert.Equal(DelegationAuthMode.OAuth, Mode);
+                TokenCalls++;
+                Assert.Equal("Basic", request.Headers.Authorization?.Scheme);
+                Assert.Equal(Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Client:D}:private-client-secret")),
+                    request.Headers.Authorization!.Parameter);
+                var form = await request.Content!.ReadAsStringAsync(cancellationToken);
+                Assert.Contains("grant_type=client_credentials", form);
+                Assert.Contains("scope=app-delegation", form);
+                Assert.DoesNotContain("private-client-secret", form);
+                return DenyToken ? new(HttpStatusCode.Unauthorized) :
+                    Json(new { access_token = "service-token", expires_in = TokenLifetime });
+            }
+            if (Revoked) return new(HttpStatusCode.Unauthorized);
+            var prefix = Mode == DelegationAuthMode.Legacy ? "/v1" : "/v1/hosted";
+            if (request.RequestUri!.AbsolutePath.EndsWith("/app-embeds/exchange", StringComparison.Ordinal))
+            {
+                Assert.Equal($"{prefix}/app-embeds/exchange", request.RequestUri.AbsolutePath);
+                EmbedCalls++;
                 using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
                 Assert.Equal(Client, body.RootElement.GetProperty("clientId").GetGuid());
-                Assert.Equal("private-client-secret", body.RootElement.GetProperty("clientSecret").GetString());
+                AssertAuthentication(request, body.RootElement);
                 Assert.Equal("single-use-embed-ticket", body.RootElement.GetProperty("ticket").GetString());
+                if (DenyHosted) return new(HttpStatusCode.NotFound);
                 return Json(new EmbedAdmission(Workspace, Installation, BoundOrigin, EmbedEntryUrl));
             }
             if (request.RequestUri!.AbsolutePath.Contains("app-delegations"))
             {
+                Assert.Contains(request.RequestUri.AbsolutePath, new[] { "exchange", "renew", "revoke" }
+                    .Select(operation => $"{prefix}/app-delegations/{operation}"));
+                DelegationCalls++;
                 using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                Assert.Equal(Client, body.RootElement.GetProperty("clientId").GetGuid());
+                AssertAuthentication(request, body.RootElement);
+                if (DenyHosted) return new(HttpStatusCode.NotFound);
                 var id = body.RootElement.GetProperty("delegationId").GetGuid();
                 var credentials = new DelegatedCredentials(id, Account, User, Workspace, Installation, Node,
                     "main", Writable, "vda1.encrypted-access", AccessExpiry, "private-renewal-original", AbsoluteExpiry,
@@ -364,6 +504,19 @@ public sealed class LiveOfficeStoreTests
             var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Content) };
             response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue($"\"{Revision}\"");
             return response;
+        }
+        private void AssertAuthentication(HttpRequestMessage request, JsonElement body)
+        {
+            if (Mode == DelegationAuthMode.Legacy)
+            {
+                Assert.Equal("private-client-secret", body.GetProperty("clientSecret").GetString());
+                Assert.Null(request.Headers.Authorization);
+            }
+            else
+            {
+                Assert.False(body.TryGetProperty("clientSecret", out _));
+                Assert.Equal("Bearer service-token", request.Headers.Authorization?.ToString());
+            }
         }
         private static HttpResponseMessage Json(object value) => new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };
     }

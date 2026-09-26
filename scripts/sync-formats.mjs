@@ -15,12 +15,14 @@ for (const [extension, format] of Object.entries(formats)) {
     fileType.extensions.push(`.${extension}`);
     fileTypes.set(pattern, fileType);
 }
-const path = 'manifests/environments/local.yaml';
-const manifest = parse(readFileSync(path, 'utf8'));
 const expected = { 'mime-types': [...bindings.values()], 'file-types': [...fileTypes.values()] };
-if (process.argv.includes('--check')) {
-    for (const [key, value] of Object.entries(expected)) assert.deepEqual(manifest.spec[key], value, `${path}: run npm run sync:formats`);
-} else {
-    Object.assign(manifest.spec, expected);
-    writeFileSync(path, stringify(manifest));
+for (const environment of ['local', 'production']) {
+    const path = `manifests/environments/${environment}.yaml`;
+    const manifest = parse(readFileSync(path, 'utf8'));
+    if (process.argv.includes('--check')) {
+        for (const [key, value] of Object.entries(expected)) assert.deepEqual(manifest.spec[key], value, `${path}: run npm run sync:formats`);
+    } else {
+        Object.assign(manifest.spec, expected);
+        writeFileSync(path, stringify(manifest));
+    }
 }

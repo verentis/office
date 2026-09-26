@@ -5,7 +5,13 @@ self-hosted Collabora CODE. The local preview uses installation-bound backend
 delegation and conditional platform saves. It registers 56 CODE-supported file
 extensions; view-only formats remain read-only. See
 [live setup, supported formats and limitations](docs/live-local-setup.md).
-Production package manifests remain disabled pending production acceptance.
+The base manifest is disabled unless an environment overlay is selected.
+The `production` overlay targets `https://office.apps.verentis.dev` and binds
+the package to its registered publisher backend client; it includes the same
+supported formats as the local preview. The existing workspace
+`publish-all --env production` command selects this overlay. It still requires
+the platform's hosted-service gate and explicit workspace consent; publishing
+a package does not establish successful live document editing.
 The separate sprint AKS workload deployment is documented in
 [operations](docs/operations.md#sprint-aks-deployment).
 The standalone synthetic harness is separate from the live Aspire integration.
@@ -26,15 +32,22 @@ and digest-pinned CODE automatically:
 dotnet run --project "src/0 - Aspire/Verentis.AppHost"
 ```
 
-Open a supported file in its authenticated workspace after installation,
-consent and backend pairing. The wrapper runs at **https://office.localtest.me**;
+For a new hosted installation, register the `local` publisher service for
+`https://office.localtest.me`, save its client ID and one-time secret in
+**AppHost user-secrets**, then reload AppHost. A signed Office package bound to
+that exact service and explicit workspace-admin consent are also required;
+publisher-owned workspaces are not exempt. Follow the
+[copy-paste local onboarding and secret setup](docs/live-local-setup.md#publisher-hosted-office-in-local-aspire-new-installations)
+before opening a supported file. The `npm run check` packages are **unsigned**
+and are not hosted-installation artifacts. The wrapper runs at **https://office.localtest.me**;
 editor and callbacks use
 `https://office-code.localtest.me` and `https://office-wopi.localtest.me`.
 All three use the shared wildcard certificate; CODE verifies callback TLS.
 Missing checkout, image lock or certificate files fail startup with setup guidance.
 Publish and `ASPIRE_TEST_MODE` exclude Office resources. See the
-[setup guide](docs/live-local-setup.md) for the local preview manifest and
-independent backend credential.
+[setup guide](docs/live-local-setup.md) for the signed-package and credential
+requirements. The older account-owned setup helper documents a different,
+explicit legacy mode; do not use it for a new hosted installation.
 
 To validate Office without starting unrelated platform services, use
 `dotnet run --project utilities/local-office` from platform instead. Do not run
@@ -96,16 +109,18 @@ Stop with `docker compose -f dev/compose.yaml down` (preserves the database).
 - `services/backend` — installation-bound live sessions and durable conditional-save coordination.
 - `services/wopi` — scoped WOPI protocol and configured discovery.
 - `tests/harness`, `tests/fixtures`, `tests/protocol`, `tests/browser` — test-only state and evidence.
-- `manifests` — one package root; the local overlay enables supported formats, while production stays gated.
+- `manifests` — one disabled package root; local and production overlays enable supported formats, with production bound to the registered hosted backend.
 - `deploy` — pinned image builds and reusable regional rendering.
 - `k8s` — sprint-only live workload template; no marketplace package publication.
 - `.github/workflows` — secret-free checks, manual unsigned release preparation,
-  and an OIDC-authenticated main-push sprint AKS deployment (not UAT/production).
+  and an OIDC-authenticated `feat/**`-push sprint AKS deployment using a protected
+  GitHub environment (not UAT/production).
 
 See [architecture](docs/architecture.md), [API](docs/api.md),
 [operations/recovery](docs/operations.md), [security](SECURITY.md),
 [contributing](CONTRIBUTING.md) and [third-party inventory](THIRD-PARTY-NOTICES.md).
 The existing Apache-2.0 license is unchanged. This repository does not provision
 cloud identities, permissions, secrets or storage, and does not publish packages.
-Do not push `main` until deferred dynamic parent-origin validation is complete
-and the sprint deployment prerequisites and rollout gate have been approved.
+Do not deploy until the Platform embed/host registry contract, the Office-specific
+backend credentials and persistent state, and the sprint rollout prerequisites
+described in operations have been approved.

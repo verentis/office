@@ -13,6 +13,12 @@ builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.None);
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = WopiEndpoints.MaxFileBytes);
 var configuration = builder.Configuration;
 var clientSecret = configuration["Office:ClientSecret"];
+var delegationAuthMode = configuration["Office:DelegationAuthMode"] switch
+{
+    null or "oauth" => DelegationAuthMode.OAuth,
+    "legacy" => DelegationAuthMode.Legacy,
+    _ => throw new InvalidOperationException("Office:DelegationAuthMode must be 'legacy' or 'oauth'.")
+};
 var configured = Guid.TryParse(configuration["Office:ClientId"], out var clientId) &&
     clientId != Guid.Empty && !string.IsNullOrWhiteSpace(clientSecret) &&
     !string.IsNullOrWhiteSpace(configuration["Office:PlatformOrigin"]);
@@ -28,7 +34,7 @@ if (configured)
         File.SetUnixFileMode(dataDirectory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     builder.Services.AddDataProtection().SetApplicationName("Verentis.Office")
         .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataDirectory, "keys")));
-    builder.Services.AddSingleton(new BackendIdentity(clientId, clientSecret!, platformOrigin));
+    builder.Services.AddSingleton(new BackendIdentity(clientId, clientSecret!, platformOrigin, delegationAuthMode));
     builder.Services.AddHttpClient<PlatformFileClient>(client =>
     {
         client.Timeout = TimeSpan.FromSeconds(30);
@@ -65,8 +71,9 @@ app.Use(async (context, next) =>
         });
     }
     catch (BadHttpRequestException exception) { context.Response.StatusCode = exception.StatusCode; }
-    catch (Exception)
+    catch (Exception exception)
     {
+        app.Logger.LogError(exception, "Office request {Path} failed with an unexpected dependency error.", context.Request.Path);
         if (context.Response.HasStarted)
         {
             context.Abort();

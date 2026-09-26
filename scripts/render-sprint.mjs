@@ -6,8 +6,7 @@ const root = new URL('../', import.meta.url);
 const required = [
     'AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID',
     'ACR_NAME', 'ACR_LOGIN_SERVER', 'AKS_CLUSTER_NAME', 'AKS_RESOURCE_GROUP',
-    'OFFICE_PLATFORM_ORIGIN', 'OFFICE_CLIENT_ID',
-    'OFFICE_BACKEND_SECRET', 'OFFICE_STATE_PVC'
+    'OFFICE_PLATFORM_ORIGIN', 'OFFICE_CLIENT_ID'
 ];
 const dnsName = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const digest = /^sha256:[a-f0-9]{64}$/;
@@ -25,7 +24,7 @@ export function validate(env, lock = JSON.parse(readFileSync(new URL('deploy/cod
             /^0{8}(-0{4}){3}-0{12}$/.test(env[name]))
             throw new Error(`Invalid ${name}: expected nonzero GUID`);
     }
-    for (const name of ['ACR_NAME', 'AKS_CLUSTER_NAME', 'AKS_RESOURCE_GROUP', 'OFFICE_BACKEND_SECRET', 'OFFICE_STATE_PVC']) {
+    for (const name of ['ACR_NAME', 'AKS_CLUSTER_NAME', 'AKS_RESOURCE_GROUP']) {
         if (!dnsName.test(env[name])) throw new Error(`Invalid ${name}`);
     }
     const clusterLocation = /^aks-verentis-dev-([a-z0-9]+)$/.exec(env.AKS_CLUSTER_NAME);
@@ -62,8 +61,6 @@ export function renderSprint(env, lock = JSON.parse(readFileSync(new URL('deploy
         __BACKEND_IMAGE__: env.BACKEND_IMAGE,
         __CODE_IMAGE__: `${lock.repository}:${lock.tag}@${lock.digest}`,
         __CLIENT_ID__: env.OFFICE_CLIENT_ID,
-        __BACKEND_SECRET__: env.OFFICE_BACKEND_SECRET,
-        __STATE_PVC__: env.OFFICE_STATE_PVC,
         __PLATFORM_ORIGIN__: env.OFFICE_PLATFORM_ORIGIN,
         __CODE_PARAMS__: params,
         __CODE_FRAME_POLICY__: '--o:net.content_security_policy=frame-ancestors https://office.apps.verentis.dev;'
