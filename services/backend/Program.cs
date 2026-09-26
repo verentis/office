@@ -71,8 +71,9 @@ app.Use(async (context, next) =>
         });
     }
     catch (BadHttpRequestException exception) { context.Response.StatusCode = exception.StatusCode; }
-    catch (Exception)
+    catch (Exception exception)
     {
+        app.Logger.LogError(exception, "Office request {Path} failed with an unexpected dependency error.", context.Request.Path);
         if (context.Response.HasStarted)
         {
             context.Abort();

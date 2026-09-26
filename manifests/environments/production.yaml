@@ -1,3 +1,540 @@
-# Deliberately non-routable until separately approved platform adoption.
+metadata:
+  display-name: Office
+  description: Self-hosted Office for Microsoft Office, OpenDocument, RTF, CSV and
+    other CODE-supported formats.
+  labels:
+    integration-status: production
+    synthetic-tests-only: "false"
 spec:
-  entry: https://office.invalid
+  entry: https://office.apps.verentis.dev
+  capabilities:
+    - hosted-backend
+  hosted-backend:
+    client-id: 914b3d5d-d4aa-5447-9f61-f31bc76cf1c4
+    environment: production
+    endpoint: https://office.apps.verentis.dev
+  permissions:
+    - node.file.read
+    - node.node.create
+  mime-types:
+    - pattern: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/msword
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.ms-word.document.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.openxmlformats-officedocument.wordprocessingml.template
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.ms-word.template.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text-template
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text-flat-xml
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text-master
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text-master-template
+      mode: view
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text-web
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/rtf
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: text/rtf
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/x-rtf
+      mode: edit
+      priority: 150
+      icon: lucide:file-text
+    - pattern: text/plain
+      mode: edit
+      priority: 50
+      icon: lucide:file-text
+    - pattern: text/markdown
+      mode: edit
+      priority: 50
+      icon: lucide:file-text
+    - pattern: text/x-markdown
+      mode: edit
+      priority: 50
+      icon: lucide:file-text
+    - pattern: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.ms-excel
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/msexcel
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/x-msexcel
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.ms-excel.sheet.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.ms-excel.sheet.binary.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.openxmlformats-officedocument.spreadsheetml.template
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.ms-excel.template.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.oasis.opendocument.spreadsheet
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.oasis.opendocument.spreadsheet-template
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.oasis.opendocument.spreadsheet-flat-xml
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: text/csv
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/csv
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: text/x-csv
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: text/tab-separated-values
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/x-dif-document
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: text/spreadsheet
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/x-sylk
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/x-dbase
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/dbf
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/x-dbf
+      mode: edit
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.presentation
+      mode: edit
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.ms-powerpoint
+      mode: edit
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.ms-powerpoint.presentation.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.template
+      mode: edit
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.ms-powerpoint.template.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.slideshow
+      mode: edit
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.oasis.opendocument.presentation
+      mode: edit
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.oasis.opendocument.presentation-template
+      mode: edit
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.oasis.opendocument.presentation-flat-xml
+      mode: edit
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.oasis.opendocument.graphics
+      mode: edit
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.oasis.opendocument.graphics-flat-xml
+      mode: edit
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.oasis.opendocument.graphics-template
+      mode: view
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.visio
+      mode: view
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.ms-visio.drawing
+      mode: view
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.visio2013
+      mode: view
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/x-mspublisher
+      mode: view
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.ms-publisher
+      mode: view
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.sun.xml.writer
+      mode: view
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.sun.xml.writer.template
+      mode: view
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.sun.xml.writer.global
+      mode: view
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.sun.xml.calc
+      mode: view
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.sun.xml.calc.template
+      mode: view
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.sun.xml.impress
+      mode: view
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.sun.xml.impress.template
+      mode: view
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.sun.xml.draw
+      mode: view
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.sun.xml.draw.template
+      mode: view
+      priority: 150
+      icon: lucide:shapes
+  file-types:
+    - pattern: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+      extensions:
+        - .docx
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/msword
+      extensions:
+        - .doc
+        - .dot
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.ms-word.document.macroEnabled.12
+      extensions:
+        - .docm
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.openxmlformats-officedocument.wordprocessingml.template
+      extensions:
+        - .dotx
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.ms-word.template.macroEnabled.12
+      extensions:
+        - .dotm
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text
+      extensions:
+        - .odt
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text-template
+      extensions:
+        - .ott
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text-flat-xml
+      extensions:
+        - .fodt
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text-master
+      extensions:
+        - .odm
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text-master-template
+      extensions:
+        - .otm
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.oasis.opendocument.text-web
+      extensions:
+        - .oth
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/rtf
+      extensions:
+        - .rtf
+      priority: 150
+      icon: lucide:file-text
+    - pattern: text/plain
+      extensions:
+        - .txt
+      priority: 50
+      icon: lucide:file-text
+    - pattern: text/markdown
+      extensions:
+        - .md
+      priority: 50
+      icon: lucide:file-text
+    - pattern: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      extensions:
+        - .xlsx
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.ms-excel
+      extensions:
+        - .xls
+        - .xla
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.ms-excel.sheet.macroEnabled.12
+      extensions:
+        - .xlsm
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.ms-excel.sheet.binary.macroEnabled.12
+      extensions:
+        - .xlsb
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.openxmlformats-officedocument.spreadsheetml.template
+      extensions:
+        - .xltx
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.ms-excel.template.macroEnabled.12
+      extensions:
+        - .xltm
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.oasis.opendocument.spreadsheet
+      extensions:
+        - .ods
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.oasis.opendocument.spreadsheet-template
+      extensions:
+        - .ots
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.oasis.opendocument.spreadsheet-flat-xml
+      extensions:
+        - .fods
+      priority: 150
+      icon: lucide:sheet
+    - pattern: text/csv
+      extensions:
+        - .csv
+      priority: 150
+      icon: lucide:sheet
+    - pattern: text/tab-separated-values
+      extensions:
+        - .tsv
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/x-dif-document
+      extensions:
+        - .dif
+      priority: 150
+      icon: lucide:sheet
+    - pattern: text/spreadsheet
+      extensions:
+        - .slk
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/x-dbase
+      extensions:
+        - .dbf
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.presentation
+      extensions:
+        - .pptx
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.ms-powerpoint
+      extensions:
+        - .ppt
+        - .pot
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.ms-powerpoint.presentation.macroEnabled.12
+      extensions:
+        - .pptm
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.template
+      extensions:
+        - .potx
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.ms-powerpoint.template.macroEnabled.12
+      extensions:
+        - .potm
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.slideshow
+      extensions:
+        - .ppsx
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.oasis.opendocument.presentation
+      extensions:
+        - .odp
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.oasis.opendocument.presentation-template
+      extensions:
+        - .otp
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.oasis.opendocument.presentation-flat-xml
+      extensions:
+        - .fodp
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.oasis.opendocument.graphics
+      extensions:
+        - .odg
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.oasis.opendocument.graphics-flat-xml
+      extensions:
+        - .fodg
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.oasis.opendocument.graphics-template
+      extensions:
+        - .otg
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.visio
+      extensions:
+        - .vsd
+        - .vss
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.visio2013
+      extensions:
+        - .vsdx
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/x-mspublisher
+      extensions:
+        - .pub
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.sun.xml.writer
+      extensions:
+        - .sxw
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.sun.xml.writer.template
+      extensions:
+        - .stw
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.sun.xml.writer.global
+      extensions:
+        - .sxg
+      priority: 150
+      icon: lucide:file-text
+    - pattern: application/vnd.sun.xml.calc
+      extensions:
+        - .sxc
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.sun.xml.calc.template
+      extensions:
+        - .stc
+      priority: 150
+      icon: lucide:sheet
+    - pattern: application/vnd.sun.xml.impress
+      extensions:
+        - .sxi
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.sun.xml.impress.template
+      extensions:
+        - .sti
+      priority: 150
+      icon: lucide:presentation
+    - pattern: application/vnd.sun.xml.draw
+      extensions:
+        - .sxd
+      priority: 150
+      icon: lucide:shapes
+    - pattern: application/vnd.sun.xml.draw.template
+      extensions:
+        - .std
+      priority: 150
+      icon: lucide:shapes

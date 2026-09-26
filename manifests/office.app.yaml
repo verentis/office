@@ -5,7 +5,7 @@ metadata:
   package-id: office
   display-name: Office — integration disabled
   description: Prerequisite-gated Office wrapper. Live viewing and editing are unavailable.
-  version: 0.1.6
+  version: 0.1.8
   author: Verentis
   labels:
     integration-status: disabled

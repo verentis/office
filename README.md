@@ -5,7 +5,13 @@ self-hosted Collabora CODE. The local preview uses installation-bound backend
 delegation and conditional platform saves. It registers 56 CODE-supported file
 extensions; view-only formats remain read-only. See
 [live setup, supported formats and limitations](docs/live-local-setup.md).
-Production package manifests remain disabled pending production acceptance.
+The base manifest is disabled unless an environment overlay is selected.
+The `production` overlay targets `https://office.apps.verentis.dev` and binds
+the package to its registered publisher backend client; it includes the same
+supported formats as the local preview. The existing workspace
+`publish-all --env production` command selects this overlay. It still requires
+the platform's hosted-service gate and explicit workspace consent; publishing
+a package does not establish successful live document editing.
 The separate sprint AKS workload deployment is documented in
 [operations](docs/operations.md#sprint-aks-deployment).
 The standalone synthetic harness is separate from the live Aspire integration.
@@ -103,7 +109,7 @@ Stop with `docker compose -f dev/compose.yaml down` (preserves the database).
 - `services/backend` — installation-bound live sessions and durable conditional-save coordination.
 - `services/wopi` — scoped WOPI protocol and configured discovery.
 - `tests/harness`, `tests/fixtures`, `tests/protocol`, `tests/browser` — test-only state and evidence.
-- `manifests` — one package root; the local overlay enables supported formats, while production stays gated.
+- `manifests` — one disabled package root; local and production overlays enable supported formats, with production bound to the registered hosted backend.
 - `deploy` — pinned image builds and reusable regional rendering.
 - `k8s` — sprint-only live workload template; no marketplace package publication.
 - `.github/workflows` — secret-free checks, manual unsigned release preparation,
