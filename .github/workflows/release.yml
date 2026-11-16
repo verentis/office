@@ -1,0 +1,23 @@
+name: Release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      everything:
+        description: Ship every package and hosted app
+        type: boolean
+        default: false
+permissions:
+  contents: write  # the release tags its commit v<version> (GitVersion)
+  id-token: write
+concurrency:
+  group: release
+  cancel-in-progress: false
+# Tests run in the pull request (pull-request.yml -> checks.yml); after the merge, main only builds and deploys.
+jobs:
+  delivery:
+    uses: verentis/.github/.github/workflows/app-release.yml@main
+    with:
+      everything: ${{ inputs.everything || false }}
+    secrets: inherit

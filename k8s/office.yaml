@@ -1,0 +1,160 @@
+# Rendered by scripts/render-office.mjs: every placeholder is a whole scalar, replaced by a validated JSON-quoted value.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: __EDITOR_NAME__
+  namespace: __NAMESPACE__
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: __EDITOR_NAME__}
+  template:
+    metadata:
+      labels: {app: __EDITOR_NAME__}
+    spec:
+      containers:
+        - name: editor
+          image: __EDITOR_IMAGE__
+          ports:
+            - {name: http, containerPort: 3000}
+          env:
+            - {name: NUXT_COLLABORATION_URL, value: __PLATFORM_ORIGIN__}
+            - {name: NUXT_CODE_URL, value: __CODE_URL__}
+            - {name: NUXT_PUBLIC_WRAPPER_ORIGIN, value: __WRAPPER_ORIGIN__}
+            - {name: NUXT_PUBLIC_EDITOR_ORIGIN, value: __CODE_ORIGIN__}
+            - {name: NUXT_PUBLIC_WOPI_ORIGIN, value: __PLATFORM_ORIGIN__}
+          readinessProbe:
+            httpGet: {path: /_ready, port: http}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 1000m, memory: 512Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: __EDITOR_NAME__
+  namespace: __NAMESPACE__
+spec:
+  type: ClusterIP
+  selector: {app: __EDITOR_NAME__}
+  ports:
+    - {name: http, port: 3000, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: __CODE_NAME__
+  namespace: __NAMESPACE__
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: __CODE_NAME__}
+  template:
+    metadata:
+      labels: {app: __CODE_NAME__}
+    spec:
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
+        runAsNonRoot: true
+        fsGroup: 1001
+      containers:
+        - name: code
+          image: __CODE_IMAGE__
+          ports:
+            - {name: http, containerPort: 9980}
+          securityContext:
+            capabilities:
+              add: [MKNOD]
+          env:
+            - {name: SAL_LOG, value: "-INFO-WARN"}
+            - {name: aliasgroup1, value: __PLATFORM_ALLOWLIST__}
+            - {name: extra_params, value: __CODE_PARAMS__}
+          args:
+            - __CODE_FRAME_POLICY__
+          volumeMounts:
+            - {name: shm, mountPath: /dev/shm}
+            - {name: proof, mountPath: /etc/coolwsd/proof_key, subPath: proof_key, readOnly: true}
+          readinessProbe:
+            httpGet: {path: /hosting/discovery, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: 2000m, memory: 2Gi}
+      volumes:
+        - name: shm
+          emptyDir: {medium: Memory, sizeLimit: 256Mi}
+        - name: proof
+          secret:
+            secretName: __PROOF_SECRET__
+            defaultMode: 288
+            items:
+              - {key: proof_key, path: proof_key}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: __CODE_NAME__
+  namespace: __NAMESPACE__
+spec:
+  type: ClusterIP
+  selector: {app: __CODE_NAME__}
+  ports:
+    - {name: http, port: 9980, targetPort: http}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: __EDITOR_NAME__
+  namespace: __NAMESPACE__
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-access-log: "false"
+spec:
+  ingressClassName: nginx
+  tls:
+    - {hosts: [__EDITOR_HOST__], secretName: __TLS_SECRET__}
+  rules:
+    - host: __EDITOR_HOST__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: __EDITOR_NAME__
+                port: {number: 3000}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: __CODE_NAME__
+  namespace: __NAMESPACE__
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-access-log: "false"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - {hosts: [__CODE_HOST__], secretName: __TLS_SECRET__}
+  rules:
+    - host: __CODE_HOST__
+      http:
+        paths:
+          - path: /browser
+            pathType: Prefix
+            backend:
+              service:
+                name: __EDITOR_NAME__
+                port: {number: 3000}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: __CODE_NAME__
+                port: {number: 9980}

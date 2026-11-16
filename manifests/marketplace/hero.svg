@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="640" viewBox="0 0 1600 640" role="img" aria-labelledby="title desc">
+  <title id="title">Libre Office marketplace background</title>
+  <desc id="desc">Subdued layered paper-like planes on a tonal background, with a quiet centre for the marketplace title, details and install controls. Decorative edge motifs remain expendable under responsive cover cropping. No text, interface or product mark is embedded.</desc>
+  <defs>
+    <linearGradient id="field" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#29483D"/><stop offset="1" stop-color="#416252"/></linearGradient>
+    <linearGradient id="edges"><stop stop-color="white" stop-opacity=".5"/><stop offset=".17" stop-color="white" stop-opacity="0"/><stop offset=".83" stop-color="white" stop-opacity="0"/><stop offset="1" stop-color="white" stop-opacity=".45"/></linearGradient>
+    <mask id="quiet"><rect width="1600" height="640" fill="url(#edges)"/></mask>
+  </defs>
+  <rect width="1600" height="640" fill="url(#field)"/>
+  <g mask="url(#quiet)" color="#BCD0C7" stroke="currentColor" stroke-width="2" opacity=".18"><path d="m-150 230 215-100 135 310-215 100zm90 10 215-100 135 310-215 100zM1460 160l210 65-110 350-210-65zm55 40 210 65-110 350-210-65z" fill="none"/></g>
+</svg>

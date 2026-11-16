@@ -1,0 +1,22 @@
+name: Pull request
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, closed]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: ${{ github.event.action != 'closed' }}
+jobs:
+  checks:
+    if: github.event.action != 'closed'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/checks.yml
+  delivery:
+    needs: checks
+    # A closed pull request skips the checks but must still remove its preview.
+    if: ${{ !cancelled() && (needs.checks.result == 'success' || github.event.action == 'closed') }}
+    uses: verentis/.github/.github/workflows/app-pull-request.yml@main
+    secrets: inherit

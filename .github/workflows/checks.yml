@@ -1,0 +1,42 @@
+name: Tests
+# Run by pull-request.yml before the preview is delivered (and on fork pull requests); the release after the merge
+# does not repeat them.
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Install Chromium for framing tests
+        run: npx --no-install playwright install --with-deps chromium
+      - run: npm run check && npm run check:framing
+      - run: node scripts/verify-code-lock.mjs
+      - run: npm run build
+      # Real WOPI integration runs in the platform warm harness; Office has no substitute WOPI host.
+      - run: docker build -f deploy/editor.Dockerfile -t office-editor:check . && node scripts/check-images.mjs office-editor:check
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verification
+          path: |
+            artifacts/browser-results.json
+            artifacts/packages/
+            artifacts/deploy/
+          retention-days: 7
+  validate:
+    uses: verentis/.github/.github/workflows/validate-verentis-package.yml@main
+    with:
+      package-root: manifests
+      manifest: office.app.yaml

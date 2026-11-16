@@ -1,0 +1,10 @@
+export const MAX_SOURCE_BYTES: number;
+export const MAX_TEXT_CHARS: number;
+export function readableKind(path: string): 'text' | 'sheet' | 'slides' | null;
+export const CONVERT_TO: { text: 'txt'; sheet: 'html'; slides: 'fodp' };
+export function validWorkspacePath(path: unknown): path is string;
+export function rawFileUrl(platformUrl: string, path: string): URL;
+export function sheetHtmlToText(html: string): string;
+export function slidesFodpToText(xml: string): string;
+export function truncate(text: string): { content: string; truncated: boolean };
+export function failure(code: string, message: string): { ok: false; code: string; message: string };

@@ -1,0 +1,884 @@
+api-version: verentis.io/v1
+kind: Application
+metadata:
+  id: libre-office
+  name: Libre Office
+  description: View and edit workspace documents, spreadsheets and presentations
+    with the Collabora editor.
+  icon: "#app"
+  version: 0.1.32
+  author: Verentis
+  labels:
+    integration-status: consent-required
+marketplace:
+  logo: ./marketplace/logo.svg
+  hero:
+    source: ./marketplace/hero.svg
+    alt: "Subdued layered paper-like planes on a tonal background, with a quiet
+      centre for the marketplace title, details and install controls."
+  images:
+    - source: ./marketplace/calc.png
+      alt: Actual Collabora spreadsheet editor displaying an original synthetic season
+        budget with areas, budgets and remaining amounts.
+      caption: "Spreadsheet editing in Collabora: original synthetic season budget,
+        not customer data."
+    - source: ./marketplace/writer.png
+      alt: Actual Collabora document editor displaying an original synthetic planning
+        brief with headings and paragraphs.
+      caption: "Document editing in Collabora: original synthetic planning brief, not
+        a desktop LibreOffice screenshot."
+    - source: ./marketplace/impress.png
+      alt: Actual Collabora presentation editor displaying an original synthetic
+        season-planning slide.
+      caption: "Presentation editing in Collabora: original synthetic slide, captured
+        from the real browser editor."
+  readme: ./marketplace/README.md
+
+# Shared icons, referenced as "#key" here and in environments/*.yaml (overlays deep-merge onto this map).
+icons:
+  app: ./icons/office.svg
+  doc: ./icons/document.svg
+  sheet: ./icons/spreadsheet.svg
+  slides: ./icons/slides.svg
+  drawing: ./icons/drawing.svg
+
+spec:
+  scope: global
+  entry: https://office.apps.verentis.io
+  mime-types:
+    - pattern: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/msword
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.ms-word.document.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.openxmlformats-officedocument.wordprocessingml.template
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.ms-word.template.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text-template
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text-flat-xml
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text-master
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text-master-template
+      mode: view
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text-web
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/rtf
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: text/rtf
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: application/x-rtf
+      mode: edit
+      priority: 150
+      icon: "#doc"
+    - pattern: text/plain
+      mode: edit
+      priority: 50
+      icon: "#doc"
+    - pattern: text/markdown
+      mode: edit
+      priority: 50
+      icon: "#doc"
+    - pattern: text/x-markdown
+      mode: edit
+      priority: 50
+      icon: "#doc"
+    - pattern: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.ms-excel
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/msexcel
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/x-msexcel
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.ms-excel.sheet.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.ms-excel.sheet.binary.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.openxmlformats-officedocument.spreadsheetml.template
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.ms-excel.template.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.oasis.opendocument.spreadsheet
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.oasis.opendocument.spreadsheet-template
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.oasis.opendocument.spreadsheet-flat-xml
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: text/csv
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/csv
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: text/x-csv
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: text/tab-separated-values
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/x-dif-document
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: text/spreadsheet
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/x-sylk
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/x-dbase
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/dbf
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/x-dbf
+      mode: edit
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.presentation
+      mode: edit
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.ms-powerpoint
+      mode: edit
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.ms-powerpoint.presentation.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.template
+      mode: edit
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.ms-powerpoint.template.macroEnabled.12
+      mode: edit
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.slideshow
+      mode: edit
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.oasis.opendocument.presentation
+      mode: edit
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.oasis.opendocument.presentation-template
+      mode: edit
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.oasis.opendocument.presentation-flat-xml
+      mode: edit
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.oasis.opendocument.graphics
+      mode: edit
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.oasis.opendocument.graphics-flat-xml
+      mode: edit
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.oasis.opendocument.graphics-template
+      mode: view
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.visio
+      mode: view
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.ms-visio.drawing
+      mode: view
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.visio2013
+      mode: view
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/x-mspublisher
+      mode: view
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.ms-publisher
+      mode: view
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.sun.xml.writer
+      mode: view
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.sun.xml.writer.template
+      mode: view
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.sun.xml.writer.global
+      mode: view
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.sun.xml.calc
+      mode: view
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.sun.xml.calc.template
+      mode: view
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.sun.xml.impress
+      mode: view
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.sun.xml.impress.template
+      mode: view
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.sun.xml.draw
+      mode: view
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.sun.xml.draw.template
+      mode: view
+      priority: 150
+      icon: "#drawing"
+  capabilities:
+    - wopi
+  permissions: []
+  wopi:
+    editor-origin: https://office.apps.verentis.io
+    operator-origin: https://office-code.apps.verentis.io
+    actions:
+      - view
+      - edit
+    operations:
+      - rename
+      - delete
+    maximum-file-bytes: 52428800
+    idle-session-minutes: 30
+    files:
+      - mime-type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+        extension: .docx
+        editable: true
+      - mime-type: application/msword
+        extension: .doc
+        editable: true
+      - mime-type: application/vnd.ms-word.document.macroEnabled.12
+        extension: .docm
+        editable: true
+      - mime-type: application/msword
+        extension: .dot
+        editable: false
+      - mime-type: application/vnd.openxmlformats-officedocument.wordprocessingml.template
+        extension: .dotx
+        editable: true
+      - mime-type: application/vnd.ms-word.template.macroEnabled.12
+        extension: .dotm
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.text
+        extension: .odt
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.text-template
+        extension: .ott
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.text-flat-xml
+        extension: .fodt
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.text-master
+        extension: .odm
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.text-master-template
+        extension: .otm
+        editable: false
+      - mime-type: application/vnd.oasis.opendocument.text-web
+        extension: .oth
+        editable: true
+      - mime-type: application/rtf
+        extension: .rtf
+        editable: true
+      - mime-type: text/rtf
+        extension: .rtf
+        editable: true
+      - mime-type: application/x-rtf
+        extension: .rtf
+        editable: true
+      - mime-type: text/plain
+        extension: .txt
+        editable: true
+      - mime-type: text/markdown
+        extension: .md
+        editable: true
+      - mime-type: text/x-markdown
+        extension: .md
+        editable: true
+      - mime-type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+        extension: .xlsx
+        editable: true
+      - mime-type: application/vnd.ms-excel
+        extension: .xls
+        editable: true
+      - mime-type: application/msexcel
+        extension: .xls
+        editable: true
+      - mime-type: application/x-msexcel
+        extension: .xls
+        editable: true
+      - mime-type: application/vnd.ms-excel.sheet.macroEnabled.12
+        extension: .xlsm
+        editable: true
+      - mime-type: application/vnd.ms-excel.sheet.binary.macroEnabled.12
+        extension: .xlsb
+        editable: true
+      - mime-type: application/vnd.ms-excel
+        extension: .xla
+        editable: true
+      - mime-type: application/vnd.openxmlformats-officedocument.spreadsheetml.template
+        extension: .xltx
+        editable: true
+      - mime-type: application/vnd.ms-excel.template.macroEnabled.12
+        extension: .xltm
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.spreadsheet
+        extension: .ods
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.spreadsheet-template
+        extension: .ots
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.spreadsheet-flat-xml
+        extension: .fods
+        editable: true
+      - mime-type: text/csv
+        extension: .csv
+        editable: true
+      - mime-type: application/csv
+        extension: .csv
+        editable: true
+      - mime-type: text/x-csv
+        extension: .csv
+        editable: true
+      - mime-type: text/tab-separated-values
+        extension: .tsv
+        editable: true
+      - mime-type: application/x-dif-document
+        extension: .dif
+        editable: true
+      - mime-type: text/spreadsheet
+        extension: .slk
+        editable: true
+      - mime-type: application/x-sylk
+        extension: .slk
+        editable: true
+      - mime-type: application/x-dbase
+        extension: .dbf
+        editable: true
+      - mime-type: application/dbf
+        extension: .dbf
+        editable: true
+      - mime-type: application/x-dbf
+        extension: .dbf
+        editable: true
+      - mime-type: application/vnd.openxmlformats-officedocument.presentationml.presentation
+        extension: .pptx
+        editable: true
+      - mime-type: application/vnd.ms-powerpoint
+        extension: .ppt
+        editable: true
+      - mime-type: application/vnd.ms-powerpoint.presentation.macroEnabled.12
+        extension: .pptm
+        editable: true
+      - mime-type: application/vnd.ms-powerpoint
+        extension: .pot
+        editable: false
+      - mime-type: application/vnd.openxmlformats-officedocument.presentationml.template
+        extension: .potx
+        editable: true
+      - mime-type: application/vnd.ms-powerpoint.template.macroEnabled.12
+        extension: .potm
+        editable: true
+      - mime-type: application/vnd.openxmlformats-officedocument.presentationml.slideshow
+        extension: .ppsx
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.presentation
+        extension: .odp
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.presentation-template
+        extension: .otp
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.presentation-flat-xml
+        extension: .fodp
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.graphics
+        extension: .odg
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.graphics-flat-xml
+        extension: .fodg
+        editable: true
+      - mime-type: application/vnd.oasis.opendocument.graphics-template
+        extension: .otg
+        editable: false
+      - mime-type: application/vnd.visio
+        extension: .vsd
+        editable: false
+      - mime-type: application/vnd.ms-visio.drawing
+        extension: .vsd
+        editable: false
+      - mime-type: application/vnd.visio2013
+        extension: .vsdx
+        editable: false
+      - mime-type: application/vnd.visio
+        extension: .vss
+        editable: false
+      - mime-type: application/x-mspublisher
+        extension: .pub
+        editable: false
+      - mime-type: application/vnd.ms-publisher
+        extension: .pub
+        editable: false
+      - mime-type: application/vnd.sun.xml.writer
+        extension: .sxw
+        editable: false
+      - mime-type: application/vnd.sun.xml.writer.template
+        extension: .stw
+        editable: false
+      - mime-type: application/vnd.sun.xml.writer.global
+        extension: .sxg
+        editable: false
+      - mime-type: application/vnd.sun.xml.calc
+        extension: .sxc
+        editable: false
+      - mime-type: application/vnd.sun.xml.calc.template
+        extension: .stc
+        editable: false
+      - mime-type: application/vnd.sun.xml.impress
+        extension: .sxi
+        editable: false
+      - mime-type: application/vnd.sun.xml.impress.template
+        extension: .sti
+        editable: false
+      - mime-type: application/vnd.sun.xml.draw
+        extension: .sxd
+        editable: false
+      - mime-type: application/vnd.sun.xml.draw.template
+        extension: .std
+        editable: false
+  # Agent tools: read_document lets the AI agent read a document, spreadsheet or presentation headlessly with the
+  # user's consented file.read access. Office converts the saved file with its own CODE server.
+  tools:
+    - key: read_document
+      title: Read document
+      description: >-
+        Reads a workspace text document, spreadsheet or presentation (Word,
+        Excel, PowerPoint, OpenDocument, RTF and similar) as plain text.
+        Spreadsheets return tab-separated rows, each sheet under a "## <name>"
+        heading when there are several. Presentations return each slide under
+        "## Slide N", with speaker notes after "Notes:". Reads the last saved
+        version.
+      input-schema:
+        type: object
+        required: [ path ]
+        properties:
+          path:
+            type: string
+            description: Absolute workspace path of the file, for example /reports/q1.docx.
+        additionalProperties: true
+      effect: read
+      scopes: [ file.read ]
+      timeout-seconds: 120
+      implementation:
+        type: app-backend
+        operation: /agent/read-document
+        method: POST
+  # Live channel: while the user has a document open and follows the agent, app_read returns the user's selection
+  # and app_apply inserts text at the cursor. Edits stay unsaved for the user to review.
+  messages:
+    - channel: agent
+      description: >-
+        Acts in the open document for the agent. read returns the selected text
+        (nothing selected: use_headless). apply takes operations [{ op:
+        insert_text, text }] and pastes each at the cursor, replacing the
+        selection; the document is not saved.
+  actor:
+    live-channel: agent
+    surfaces:
+      - kind: document
+        read-tool: read_document
+        extensions:
+          [
+            .docx,
+            .doc,
+            .docm,
+            .dot,
+            .dotx,
+            .dotm,
+            .odt,
+            .ott,
+            .fodt,
+            .odm,
+            .otm,
+            .oth,
+            .rtf,
+            .xlsx,
+            .xls,
+            .xlsm,
+            .xlsb,
+            .xla,
+            .xltx,
+            .xltm,
+            .ods,
+            .ots,
+            .fods,
+            .dif,
+            .slk,
+            .dbf,
+            .pptx,
+            .ppt,
+            .pptm,
+            .pot,
+            .potx,
+            .potm,
+            .ppsx,
+            .odp,
+            .otp,
+            .fodp,
+            .pub,
+            .sxw,
+            .stw,
+            .sxg,
+            .sxc,
+            .stc,
+            .sxi,
+            .sti
+          ]
+  sandbox:
+    allow-scripts: true
+    allow-same-origin: true
+    allow-popups: false
+    allow-forms: true
+  file-types:
+    - pattern: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+      extensions:
+        - .docx
+      priority: 150
+      icon: "#doc"
+    - pattern: application/msword
+      extensions:
+        - .doc
+        - .dot
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.ms-word.document.macroEnabled.12
+      extensions:
+        - .docm
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.openxmlformats-officedocument.wordprocessingml.template
+      extensions:
+        - .dotx
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.ms-word.template.macroEnabled.12
+      extensions:
+        - .dotm
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text
+      extensions:
+        - .odt
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text-template
+      extensions:
+        - .ott
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text-flat-xml
+      extensions:
+        - .fodt
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text-master
+      extensions:
+        - .odm
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text-master-template
+      extensions:
+        - .otm
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.oasis.opendocument.text-web
+      extensions:
+        - .oth
+      priority: 150
+      icon: "#doc"
+    - pattern: application/rtf
+      extensions:
+        - .rtf
+      priority: 150
+      icon: "#doc"
+    - pattern: text/plain
+      extensions:
+        - .txt
+      priority: 50
+      icon: "#doc"
+    - pattern: text/markdown
+      extensions:
+        - .md
+      priority: 50
+      icon: "#doc"
+    - pattern: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      extensions:
+        - .xlsx
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.ms-excel
+      extensions:
+        - .xls
+        - .xla
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.ms-excel.sheet.macroEnabled.12
+      extensions:
+        - .xlsm
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.ms-excel.sheet.binary.macroEnabled.12
+      extensions:
+        - .xlsb
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.openxmlformats-officedocument.spreadsheetml.template
+      extensions:
+        - .xltx
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.ms-excel.template.macroEnabled.12
+      extensions:
+        - .xltm
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.oasis.opendocument.spreadsheet
+      extensions:
+        - .ods
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.oasis.opendocument.spreadsheet-template
+      extensions:
+        - .ots
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.oasis.opendocument.spreadsheet-flat-xml
+      extensions:
+        - .fods
+      priority: 150
+      icon: "#sheet"
+    - pattern: text/csv
+      extensions:
+        - .csv
+      priority: 150
+      icon: "#sheet"
+    - pattern: text/tab-separated-values
+      extensions:
+        - .tsv
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/x-dif-document
+      extensions:
+        - .dif
+      priority: 150
+      icon: "#sheet"
+    - pattern: text/spreadsheet
+      extensions:
+        - .slk
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/x-dbase
+      extensions:
+        - .dbf
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.presentation
+      extensions:
+        - .pptx
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.ms-powerpoint
+      extensions:
+        - .ppt
+        - .pot
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.ms-powerpoint.presentation.macroEnabled.12
+      extensions:
+        - .pptm
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.template
+      extensions:
+        - .potx
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.ms-powerpoint.template.macroEnabled.12
+      extensions:
+        - .potm
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.openxmlformats-officedocument.presentationml.slideshow
+      extensions:
+        - .ppsx
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.oasis.opendocument.presentation
+      extensions:
+        - .odp
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.oasis.opendocument.presentation-template
+      extensions:
+        - .otp
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.oasis.opendocument.presentation-flat-xml
+      extensions:
+        - .fodp
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.oasis.opendocument.graphics
+      extensions:
+        - .odg
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.oasis.opendocument.graphics-flat-xml
+      extensions:
+        - .fodg
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.oasis.opendocument.graphics-template
+      extensions:
+        - .otg
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.visio
+      extensions:
+        - .vsd
+        - .vss
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.visio2013
+      extensions:
+        - .vsdx
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/x-mspublisher
+      extensions:
+        - .pub
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.sun.xml.writer
+      extensions:
+        - .sxw
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.sun.xml.writer.template
+      extensions:
+        - .stw
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.sun.xml.writer.global
+      extensions:
+        - .sxg
+      priority: 150
+      icon: "#doc"
+    - pattern: application/vnd.sun.xml.calc
+      extensions:
+        - .sxc
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.sun.xml.calc.template
+      extensions:
+        - .stc
+      priority: 150
+      icon: "#sheet"
+    - pattern: application/vnd.sun.xml.impress
+      extensions:
+        - .sxi
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.sun.xml.impress.template
+      extensions:
+        - .sti
+      priority: 150
+      icon: "#slides"
+    - pattern: application/vnd.sun.xml.draw
+      extensions:
+        - .sxd
+      priority: 150
+      icon: "#drawing"
+    - pattern: application/vnd.sun.xml.draw.template
+      extensions:
+        - .std
+      priority: 150
+      icon: "#drawing"
+packaging:
+  publisher: verentis
+  encryption: none

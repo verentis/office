@@ -1,0 +1,25 @@
+{
+  "name": "verentis-libre-office",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "workspaces": ["apps/editor"],
+  "scripts": {
+    "sync:formats": "node scripts/sync-formats.mjs",
+    "check": "npm run typecheck --workspace apps/editor && node --test tests/unit/*.test.mjs && npm run check:package && npm run check:deploy",
+    "build": "npm run build --workspace apps/editor",
+    "check:package": "node scripts/check-package.mjs",
+    "check:deploy": "node scripts/check-deploy.mjs && node --test tests/unit/hosted-deploy.test.mjs",
+    "check:framing": "npm run build --workspace apps/editor && node --test tests/integration/frame-proxy.test.mjs",
+    "test:integration": "node scripts/run-platform-integration.mjs app-office",
+    "test:integration:operations": "node scripts/run-platform-integration.mjs app-office-operations",
+    "test:browser-boundaries": "playwright test",
+    "fixtures": "python3 tests/fixtures/generate.py"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@verentis/cli": "^1.0.0",
+    "yaml": "2.9.1"
+  }
+}

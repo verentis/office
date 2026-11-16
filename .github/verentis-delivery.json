@@ -1,0 +1,29 @@
+{
+  "hosted": [
+    {
+      "name": "office",
+      "package-root": "manifests",
+      "image": "verentis/office-editor",
+      "context": ".",
+      "dockerfile": "deploy/editor.Dockerfile",
+      "render": "node scripts/render-office.mjs",
+      "pre-deploy": "node scripts/verify-code-lock.mjs && node scripts/provision-code-proof.mjs \"$NAMESPACE\" && node scripts/check-prerequisites.mjs \"$NAMESPACE\"",
+      "secrets": ["CODE_PROOF_KEY"],
+      "deployments": ["office-code", "office-editor"],
+      "health": [
+        { "host": "office", "path": "/_ready" },
+        { "host": "office-code", "path": "/hosting/discovery" }
+      ],
+      "paths": [
+        "apps/",
+        "deploy/",
+        "k8s/",
+        ".dockerignore",
+        "scripts/render-office.mjs",
+        "scripts/provision-code-proof.mjs",
+        "scripts/check-prerequisites.mjs",
+        "scripts/verify-code-lock.mjs"
+      ]
+    }
+  ]
+}

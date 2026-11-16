@@ -1,0 +1,21 @@
+{
+  "name": "@verentis/office-editor",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@verentis/sdk": "1.0.0",
+    "nuxt": "4.6.3",
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "6.0.3",
+    "vue-tsc": "3.3.14"
+  }
+}
