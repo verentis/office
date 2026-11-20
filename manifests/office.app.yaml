@@ -6,7 +6,7 @@ metadata:
   description: View and edit workspace documents, spreadsheets and presentations
     with the Collabora editor.
   icon: "#app"
-  version: 0.1.32
+  version: 0.1.33
   author: Verentis
   labels:
     integration-status: consent-required
